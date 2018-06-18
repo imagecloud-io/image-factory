@@ -1,0 +1,64 @@
+---
+  - name: Add disks if needed
+    block:
+    - name: Configure disks
+      script: files/init_raw_disks.ps1 -Verbose
+
+    - name: Clean ACLS
+      script: files/clean_acl.ps1 -Verbose
+
+    - name: Set ACLS on e
+      win_acl:
+        path: e:\
+        rights: FullControl
+        state: present
+        user: "{{ item }}"
+        inherit: ContainerInherit, ObjectInherit
+        type: allow
+      with_items:
+        - Administrators
+        - SYSTEM
+
+    - name: Create dirs
+      win_file:
+        path: "{{ item }}"
+        state: directory
+      with_items:
+        - e:\scripts
+        - e:\logfiles
+
+    - name: Set pagefile on C to 2048-3072
+      win_pagefile:
+        action: ensure
+        drive_letters: [ C ]
+        initial_size_mb: 2048
+        max_size_mb: 3072
+        system_managed: no
+        no_pagefile: no
+      register: result
+      when: cloud_type not in [ "azure" ]
+
+    - name: See if a reboot is required
+      set_fact:
+        do_reboot: "{{ result.reboot_required }}"
+      when: cloud_type not in [ "azure" ]
+
+    - name: Set pagefile on E to none
+      win_pagefile:
+        action: ensure
+        drive_letters: [  E ]
+        no_pagefile: yes
+      register: result
+
+    - name: See if a reboot is required
+      set_fact:
+        do_reboot: True
+      when: result.reboot_required
+
+    - name: Reboot vm if required
+      win_reboot:
+        shutdown_timeout_sec: 3600
+        reboot_timeout_sec: 3600
+      when: do_reboot
+
+    when: add_disks is defined

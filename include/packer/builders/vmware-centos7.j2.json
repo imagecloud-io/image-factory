@@ -1,0 +1,75 @@
+{
+    "builders":
+    [
+        {
+            "type": "vmware-iso",
+            "version": "11",
+            "remote_type": "esx5",
+            "remote_host": "{{ buildhost_facts.hostname }}",
+            "remote_username": "{{ buildhost_facts.username }}",
+            "remote_password": "{{ secrets.esxi.password }}",
+            "remote_datastore": "{{ buildhost_facts.datastore }}",
+            "skip_compaction": "true",
+            "disk_type_id": "thin",
+            "disk_size": "{{ base_templates[cloud_type][template].os_disk_mb }}",
+            "disk_additional_size": [ "{{ base_templates[cloud_type][template].data_disk_mb }}" ],
+            "guest_os_type": "{{ base_templates[cloud_type][template].guest_os }}",
+            "vm_name": "{{ base_templates[cloud_type][template].vm_name }}",
+            "output_directory": "{{ base_templates[cloud_type][template].vm_name }}",
+            "iso_checksum": "{{ base_templates[cloud_type][template].iso_checksum }}",
+            "iso_checksum_type": "{{ base_templates[cloud_type][template].iso_checksum_type }}",
+            "iso_url": "{{ base_templates[cloud_type][template].iso }}",
+            "headless": true,
+            "vnc_port_min": 5950,
+            "vnc_port_max": 5980,
+            "vnc_disable_password": "true",
+            "boot_wait": "5s",
+            "shutdown_command": "shutdown -Ph now",
+            "ssh_username": "root",
+            "ssh_password": "{{ secrets.template.password }}",
+            "ssh_wait_timeout": "30m",
+            "keep_registered": "true",
+            "floppy_files":
+            [
+                "{{ tmpdir }}/{{ base_templates[cloud_type][template].answer_file }}"
+            ],
+            "vmx_data":
+            {
+                "ethernet0.virtualDev": "vmxnet3",
+                "ethernet0.present": "TRUE",
+                "ethernet0.startConnected": "TRUE",
+                "ethernet0.networkName": "{{ buildhost_facts.portgroup }}",
+                "ethernet0.addressType": "generated",
+                "ethernet0.wakeOnPcktRcv": "FALSE",
+                "memsize": "1024",
+                "numvcpus": "1",
+                "vcpu.hotadd": "TRUE",
+                "mem.hotadd": "TRUE",
+                "cpuid.coresPerSocket": "1",
+                "keyboard.typematicMinDelay": "2000000",
+                "ide1:0.present": "Do not disable, packer uses this to boot from cdrom",
+                "ide1:0.present": "TRUE",
+                "scsi0.virtualdev": "pvscsi"
+            },
+            "vmx_data_post":
+            {
+                "ide1:0.startConnected": "FALSE",
+                "ide1:0.devicetype": "atapi-cdrom",
+                "ide1:0.filename": "CD-ROM 1",
+                "ide1:0.clientDevice": "TRUE",
+                "sched.mem.pin": "TRUE"
+            },
+            "boot_command":
+            [
+                "<tab> text ks=hd:fd0:/KS.CFG<enter><wait><enter><wait><esc><wait>"
+            ]
+        }
+    ],
+    "provisioners":
+    [
+        {
+            "type": "shell",
+            "inline": [ "FILE=/etc/udev/rules.d/70-persistent-net.rules; if [ -f ${FILE} ]; then rm ${FILE}; fi" ]
+        }
+    ]
+}

@@ -1,0 +1,12 @@
+---
+  - name: Init install_updates
+    set_fact:
+      install_updates: true
+
+# Install Windows updates, without definition updates, which tend to fail here and need to be done again
+# anyway when a machine is deployed from the image
+
+  - name: Install Windows updates (without definition updates)
+    include_tasks: winupdate.yml
+    with_sequence: count=20
+

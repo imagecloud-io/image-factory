@@ -1,0 +1,193 @@
+---
+- name: Install VMware tools (Windows)
+  hosts: vm_stager_windows
+  gather_facts: false
+
+  pre_tasks:
+    - name: Set base variables
+      set_fact:
+        base_dir: "{{ lookup('pipe', 'git rev-parse --show-toplevel') }}"
+        cloud_type: "{{ cloud_env[cloud].type }}"
+        last_commit: "{{ lookup('pipe', 'git log -n 1') }}"
+      delegate_to: localhost
+
+  tasks:
+    - name: Create temp dir for include
+      win_tempfile:
+        state: directory
+        prefix: vmtools
+      changed_when: False
+      register: _tmpdir
+
+    - name: Set temp dir
+      set_fact:
+        tmpdir: "{{ _tmpdir.path }}"
+
+    - name: Copy files to VM
+      win_get_url:
+        url: "{{ files_download_url}}/{{ item }}"
+        dest: "{{ tmpdir }}/{{ item }}"
+      changed_when: False
+      with_items:
+        - vmware-tools-win.zip
+
+    - block:
+      - name: Create temp dir for tools
+        win_tempfile:
+          state: directory
+          prefix: vmtools
+        changed_when: False
+        register: _tmpdir_tools
+
+      - name: set temp dir for ISO
+        set_fact:
+          tmpdir_tools: "{{ _tmpdir_tools.path }}"
+
+      - name: Extract VMware tools tools
+        win_unzip:
+          src: "{{ tmpdir + '\\vmware-tools-win.zip' }}"
+          dest: "{{ tmpdir_tools }}"
+
+      - name: Install VMware tools
+        win_command: "{{ tmpdir_tools + '\\setup.exe /S /v\"/qn REBOOT=R\"'}}"
+        args:
+          chdir: "{{ tmpdir_tools }}"
+          creates: C:\Program Files\VMware\VMware Tools\vmtoolsd.exe
+        register: result
+        failed_when: result.rc not in [0, 3010]
+
+      - name: Remove temp tools directory
+        win_file:
+          path: "{{ tmpdir_tools }}"
+          state: absent
+        changed_when: False
+      when: cloud_env[cloud].type == "vmware"
+
+    - name: Enable RDP through firewall
+      win_firewall_rule:
+        name: Allow RDP
+        action: allow
+        direction: in
+        enabled: yes
+        localport: 3389
+        state: present
+        protocol: tcp
+
+    - name: Enable RDP
+      win_regedit:
+        path: HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server
+        name: fDenyTSConnections
+        type: dword
+        data: 0
+
+    - name: Disable IPv6
+      win_regedit:
+        path: HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters
+        type: dword
+        name: DisabledComponents
+        data: 255
+
+    - name: Remove temp directory
+      win_file:
+        path: "{{ tmpdir }}"
+        state: absent
+      changed_when: False
+
+    - name: Issue shutdown command
+      win_command: shutdown /s /t 1 /f /d p:4:1 /c Done
+
+- name: Install VMware tools for linux (just shut it down)
+  hosts: vm_stager_linux
+  gather_facts: false
+  become: yes
+
+  tasks:
+
+    - name: Install open-vm-tools if necessary
+      package:
+        name:
+          - open-vm-tools
+        state: installed
+
+    - name: shutdown VM
+      command: /usr/sbin/shutdown -h +1
+      when: true
+
+
+- name: Fix VM hardware
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  roles:
+    - role: imagecloud-vm-ops
+      cloud_params: "{{ cloud_env[cloud] }}"
+      cloud_password: "{{ secrets[cloud].vcenter.password }}"
+      source_vm: "{{ base_templates[cloud_type][template].vm_name }}"
+      source_folder: "{{ cloud_env[cloud].packer_folder }}"
+      action: wait_poweredoff
+
+  post_tasks:
+    - block:
+      - name: Get raw list of VMs on ESXi
+        command: vim-cmd vmsvc/getallvms
+        register: vm_list
+
+      - name: Create ESXi inventory dictionary
+        set_fact:
+          esxi_inventory: "{{ esxi_inventory|default({})|combine(
+                             { item|tblsplit(1)|trim:
+                               {
+                                'vmid': item|tblsplit(0)|trim,
+                                'path': item|tblsplit(2)|trim|regex_replace('\\[(.*)\\] (.*)$','/vmfs/volumes/\\1/\\2'),
+                                'guest': item|tblsplit(3)|trim,
+                                'version': item|tblsplit(4)|trim,
+                                'annotation': item|tblsplit(5)|trim,
+                               }
+                             } )
+                           }}"
+        with_items: "{{ vm_list.stdout_lines  }}"
+
+      - name: Unregister VM
+        command: vim-cmd vmsvc/unregister "{{ esxi_inventory[template_name]['vmid'] }}"
+
+      - name: Change VMX file
+        lineinfile:
+          path: "/{{ esxi_inventory[template_name]['path'] }}"
+          regexp: "{{ item.search }}"
+          line: "{{ item.replace }}"
+        with_items:
+          - search: ^tools\.upgrade\.policy = .+
+            replace: tools.upgrade.policy = \"manual\"
+          - search: ^tools\.sync[tT]ime = .+
+            replace: tools.syncTime = "FALSE"
+          - search: ^bios\.boot[oO]rder = .+
+            replace: bios.bootOrder = "hdd"
+          - search: ^scsi0\.virtual[dD]ev = .+
+            replace: scsi0.virtualDev = "pvscsi"
+          - search: ^scsi1\.present = .+
+            replace: scsi1.present = "FALSE"
+          - search: ^ethernet0\.virtual[dD]ev = .+
+            replace: ethernet0.virtualDev = "vmxnet3"
+
+      - name: Register VM
+        command: vim-cmd solo/registervm "{{ esxi_inventory[template_name]['path'] }}"
+
+      - name: Take it easy
+        wait_for:
+          timeout: 20
+
+      delegate_to: "{{ cloud_env[cloud].buildhost[buildhost].hostname }}"
+
+- name: Power on after fixing VM hardware
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  roles:
+    - role: imagecloud-vm-ops
+      cloud_params: "{{ cloud_env[cloud] }}"
+      cloud_password: "{{ secrets[cloud].vcenter.password }}"
+      source_vm: "{{ base_templates[cloud_type][template].vm_name }}"
+      source_folder: "{{ cloud_env[cloud].packer_folder }}"
+      action: poweron

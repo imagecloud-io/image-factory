@@ -1,0 +1,10 @@
+---
+
+  - name: imagecloud-setup-basic | Validate required variables
+    fail:
+      msg: "No value specified for '{{ item }}'"
+    when: ({{ item }} is undefined) or ({{ item }} is defined and {{ item|trim == '' }})
+    with_items: "{{ required_variables }}"
+
+  - name: Do stuff
+    include_tasks: "{{ ansible_os_family }}.yml"

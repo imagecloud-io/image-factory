@@ -1,0 +1,15 @@
+---
+# tasks file for imagecloud-hardening
+  - name: imagecloud-hardening | Validate required variables
+    fail:
+      msg: "No value specified for '{{ item }}'"
+    when: ({{ item }} is undefined) or ({{ item }} is defined and {{ item|trim == '' }})
+    with_items: "{{ required_variables }}"
+
+  - name: imagecloud-hardening | Validate target
+    fail:
+      msg: "Target {{ target }} hasn't been implemented"
+    when: target not in targets[ansible_os_family]
+
+  - name: Do stuff
+    include_tasks: "{{ ansible_os_family }}-{{ target }}.yml"

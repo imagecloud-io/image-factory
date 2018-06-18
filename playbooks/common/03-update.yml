@@ -1,0 +1,18 @@
+---
+- name: Run updates
+  hosts: vm_stager_windows:vm_stager_linux
+  gather_facts: true
+
+
+  vars:
+    install_updates: true
+
+  roles:
+    - role: imagecloud-wsus-client
+      wsus_client_server: "{{ cloud_env[cloud].wsus.wsus_client_server }}"
+      wsus_client_target_group: "{{ cloud_env[cloud].wsus.wsus_client_target_group }}"
+      wsus_client_enable: "{{ cloud_env[cloud].wsus.wsus_client_enable }}"
+
+    - role: imagecloud-os-update
+
+

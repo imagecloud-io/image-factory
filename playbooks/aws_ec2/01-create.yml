@@ -1,0 +1,160 @@
+---
+- name: Start the template creation process (from scratch)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    base_dir: "{{ lookup('pipe', 'git rev-parse --show-toplevel') }}"
+    cloud_type: "{{ cloud_env[cloud].type }}"
+    last_commit: "{{ lookup('pipe', 'git log -n 1') }}"
+    timestamp: "{{ lookup('pipe', 'date +%s') }}"
+
+  tasks:
+    - name: Create private key file
+      block:
+
+      - name: Create `secrets` directory
+        file:
+          path: "{{ base_dir }}/.secrets"
+          state: directory
+
+      - name: Write ssh key to local filesystem
+        copy:
+          dest: "{{ base_dir }}/.secrets/factory"
+          content: "{{ secrets.template.ssh_keys.private }}"
+          mode: 0400
+        no_log: true
+
+# TODO: find out why ec2_win_password isn't working
+
+    - name: Generate pseudo random string meeting complexity requirements
+      set_fact:
+        win_pass: "{{ 'r9G' + lookup('password', '/dev/null chars=ascii_letters,digits length=20') + 'aE8' }}"
+      no_log: true
+
+    - name: Create key
+      ec2_key:
+        aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
+        aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
+        name: "{{ cloud_env[cloud].keypair }}"
+        key_material: "{{ secrets.template.ssh_keys.contents }}"
+        region: "{{ cloud_env[cloud].region }}"
+        state: present
+
+    - name: get VPC from subnet ID
+      ec2_vpc_subnet_facts:
+        aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
+        aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
+        subnet_ids: "{{ cloud_env[cloud].subnet_id }}"
+        region: "{{ cloud_env[cloud].region }}"
+      register: _subnet_facts
+
+    - name: Isolate VPC id from subnet
+      set_fact:
+        instance_vpc_id: "{{ _subnet_facts.subnets[0].vpc_id }}"
+
+    - name: Create security group
+      ec2_group:
+        aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
+        aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
+        name: "{{ cloud_env[cloud].sec_group }}"
+        description: "Image factory management ports"
+        vpc_id: "{{ instance_vpc_id }}"
+        region: "{{ cloud_env[cloud].region }}"
+        rules: "{{ cloud_env[cloud].default_sec_rules }}"
+        state: present
+
+    - name: Find correct AMI id
+      ec2_ami_facts:
+        aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
+        aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
+        region: "{{ cloud_env[cloud].region }}"
+        owners: "{{ base_templates[cloud_env[cloud].type][template].base_ami.owner }}"
+        filters:
+          name: "{{ base_templates[cloud_env[cloud].type][template].base_ami.name }}"
+      register: ami_list
+
+    - name: Create name/date/image_id list
+      set_fact:
+        concise_ami_list: "{{ concise_ami_list | default([]) + [{'name': item.name, 'image_id': item.image_id, 'creation_date': item.creation_date} ] }}"
+      loop: "{{ ami_list.images }}"
+
+    - name: Sort list
+      set_fact:
+        concise_ami_list_sorted: "{{ concise_ami_list | default([]) | sort(attribute='creation_date', reverse=true) }}"
+
+    - name: Fail if list is empty
+      fail:
+        msg: "No AMIs were found that match the criteria"
+      when: not concise_ami_list_sorted
+
+    - name: Get latest AMI from the list
+      set_fact:
+        base_ami: "{{ concise_ami_list_sorted[0] }}"
+
+    - name: Create EC2 instance
+      ec2_instance:
+        aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
+        aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
+        key_name: "{{ cloud_env[cloud].keypair }}"
+        name: "{{ base_templates[cloud_env[cloud].type][template].vm_name }}"
+        security_group: "{{ cloud_env[cloud].sec_group }}"
+        instance_type: "{{ base_templates[cloud_env[cloud].type][template].instance_type }}"
+        image_id: "{{ base_ami.image_id }}"
+        region: "{{ cloud_env[cloud].region }}"
+        user_data: "{{ lookup('template', base_dir + '/' + base_templates[cloud_env[cloud].type][template].user_data ) }}"
+        vpc_subnet_id: "{{ cloud_env[cloud].subnet_id }}"
+        wait: true
+        state: present
+      register: ec2_instance
+
+    - name: Pick correct IP address to add to inventory
+      set_fact:
+        instance_ip_address: "{{ cloud_env[cloud].use_private_ip|default(false)|ternary(ec2_instance.instances[0].private_ip_address,ec2_instance.instances[0].public_ip_address) }}"
+
+    - name: Add Windows VM to inventory
+      add_host:
+        name: "{{ base_templates[cloud_env[cloud].type][template].vm_name }}"
+        ansible_host: "{{ instance_ip_address }}"
+        ansible_user: "{{ base_templates[cloud_env[cloud].type][ template ].admin_user }}"
+        ansible_password: "{{ win_pass }}"
+        ansible_port: 5986
+        ansible_connection: winrm
+        ansible_winrm_server_cert_validation: ignore
+        ansible_winrm_operation_timeout_sec: 120
+        ansible_winrm_read_timeout_sec: 150
+        groups: vm_stager_windows
+      no_log: true
+      when: base_templates[cloud_env[cloud].type][template].guest_os is match("windows*")
+
+    - name: Add Linux VM to inventory
+      add_host:
+        name: "{{ base_templates[cloud_env[cloud].type][template].vm_name }}"
+        ansible_host: "{{ instance_ip_address }}"
+        ansible_user: "{{ base_templates[cloud_env[cloud].type][ template ].admin_user }}"
+        ansible_ssh_private_key_file: "{{ base_dir }}/.secrets/factory"
+        ansible_become: yes
+        groups: vm_stager_linux
+      no_log: true
+      when: not base_templates[cloud_env[cloud].type][ template ].guest_os is match("windows*")
+
+- name: Wait for OS (Windows)
+  hosts: vm_stager_windows
+  gather_facts: false
+
+  tasks:
+    - name: Wait for OS response
+      wait_for_connection:
+        delay: 120
+        timeout: 600
+
+- name: Wait for OS (linux)
+  hosts: vm_stager_linux
+  gather_facts: false
+
+  tasks:
+    - name: Wait for OS response
+      wait_for_connection:
+        delay: 20
+        timeout: 600

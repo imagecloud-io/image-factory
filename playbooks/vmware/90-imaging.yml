@@ -1,0 +1,37 @@
+---
+- name: Copy basic template
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  pre_tasks:
+    - name: Set timestamp
+      set_fact:
+        timestamp: "{{ lookup('pipe', 'date +%s') }}"
+        last_commit: "{{ lookup('pipe', 'git log -n 1') }}"
+
+  roles:
+
+    - role: imagecloud-vm-ops
+      cloud_params: "{{ cloud_env[cloud] }}"
+      cloud_password: "{{ secrets[cloud].vcenter.password }}"
+      source_vm: "{{ base_templates[cloud_type][template].vm_name }}"
+      source_folder: "{{ cloud_env[cloud].packer_folder }}"
+      action: shutdown
+
+    - role: imagecloud-vm-ops
+      cloud_params: "{{ cloud_env[cloud] }}"
+      cloud_password: "{{ secrets[cloud].vcenter.password }}"
+      source_vm: "{{ base_templates[cloud_type][template].vm_name }}"
+      source_folder: "{{ cloud_env[cloud].packer_folder }}"
+      action: wait_poweredoff
+
+    - role: imagecloud-vm-ops
+      cloud_params: "{{ cloud_env[cloud] }}"
+      cloud_password: "{{ secrets[cloud].vcenter.password }}"
+      source_vm: "{{ base_templates[cloud_type][template].vm_name }}"
+      destination_vm: "{{ template }}-candidate-{{ timestamp }}"
+      source_folder: "{{ cloud_env[cloud].packer_folder }}"
+      destination_folder: "{{ cloud_env[cloud].build_folder }}"
+      vm_annotation: "{{ last_commit }}"
+      action: clone

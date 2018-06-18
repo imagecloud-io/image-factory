@@ -1,0 +1,20 @@
+---
+  - name: Use dev-sec.io's ansible-os-hardening role
+    include_role:
+      name: ansible-os-hardening
+
+  - name: Additional hardening - /etc/shadow permissions
+    file:
+      path: /etc/shadow
+      mode: "u-rw"
+
+  - name: Additional hardening - set default UMASK to 077, SYS_UID_MIN to 200, SYS_GID_MIN to 200
+    lineinfile:
+      dest: /etc/login.defs
+      regexp: "{{ item.regexp }}"
+      line: "{{ item.line }}"
+    with_items:
+      - { regexp: '^UMASK', line: 'UMASK 077' }
+      - { regexp: '^SYS_UID_MIN', line: 'SYS_UID_MIN 201' }
+      - { regexp: '^SYS_GID_MIN', line: 'SYS_GID_MIN 201' }
+

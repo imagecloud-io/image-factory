@@ -1,0 +1,25 @@
+---
+- name: Configure basic template
+  hosts: vm_stager_windows:vm_stager_linux
+  gather_facts: true
+
+  pre_tasks:
+    - name: Wait for the VM to be available (it might still be powering on)
+      wait_for_connection:
+        delay: 10
+        timeout: 600
+
+  roles:
+    - role: imagecloud-setup-basic
+      cloud_type: "{{ cloud_env[cloud].type }}"
+      vg: "{{ base_templates[cloud_type][template].data_vg|default('') }}"
+      lvol: "{{ base_templates[cloud_type][template].data_lvol|default('') }}"
+      mount: "{{ base_templates[cloud_type][template].data_mount|default('') }}"
+
+    - role: imagecloud-libraries
+      cloud_params: cloud_env[cloud]
+
+    - role: imagecloud-os-update
+
+    - role: imagecloud-hardening
+      target: base

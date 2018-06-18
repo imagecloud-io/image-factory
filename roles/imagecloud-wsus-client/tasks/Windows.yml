@@ -1,0 +1,69 @@
+---
+  - name: WSUS | Create temporary directory
+    win_tempfile:
+      state: directory
+      prefix: imagecloud-wsus-client
+    changed_when: False
+    register: _tmp
+
+  - name: Set temp dir
+    set_fact:
+      tmp_dir: "{{ _tmp.path }}"
+
+  - debug: msg="--> Created temporary directory '{{ tmp_dir }}'"
+    when: verbose|default(False)
+
+  - name: WSUS | Copy PowerShell modules to host
+    win_copy:
+      src: "files/{{ item }}"
+      dest: "{{ tmp_dir }}/{{ item }}"
+    changed_when: False
+    with_items:
+      - Get-ClientWSUSSetting.ps1
+      - Set-ClientWSUSSetting.ps1
+
+  - name: WSUS | Generate PowerShell script to retrieve WSUS settings
+    win_template:
+      src: GetWSUSClientSettings.ps1.j2
+      dest: "{{ tmp_dir }}\\GetWSUSClientSettings.ps1"
+    changed_when: False
+
+  - name: WSUS | Get client settings (1/2)
+    win_shell: "{{ tmp_dir }}\\GetWSUSClientSettings.ps1"
+    changed_when: False
+    register: _out
+
+  - debug: msg="--> Current WSUS settings{{':'}} {{_out.stdout_lines|join('\n')}}"
+    when: verbose|default(False)
+
+  - name: WSUS | Get client settings (2/2)
+    set_fact:
+      wsus_current_settings: "{{ _out.stdout|from_json }}"
+
+  - block:
+      - name: include settings
+        include_tasks: settings.yml
+
+      - debug: msg="{{ wsus_set_client_args_raw|join(' ') }}"
+        when: verbose|default(False)
+
+      - name: WSUS | Generate PowerShell script to update WSUS settings
+        win_template:
+          src: SetWSUSClientSettings.ps1.j2
+          dest: "{{ tmp_dir }}\\SetWSUSClientSettings.ps1"
+        changed_when: False
+
+      - name: WSUS | Apply WSUS settings
+        win_shell: "{{ tmp_dir }}\\SetWSUSClientSettings.ps1"
+        register: _out
+
+      - debug: var=_out
+        when: verbose|default(False)
+
+    when: (wsus_client_enable|default('yes')|bool) and (wsus_current_settings.WUServer|default('NA') != wsus_client_server)
+
+  - name: WSUS | Remove temporary directory
+    win_file:
+      path: "{{ tmp_dir }}"
+      state: absent
+    changed_when: False

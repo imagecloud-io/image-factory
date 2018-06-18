@@ -1,0 +1,57 @@
+---
+# defaults file for imagecloud-vm-ops
+  required_variables:
+    clone:
+      - cloud_params
+      - cloud_password
+      - source_vm
+      - destination_vm
+      - source_folder
+      - destination_folder
+    rmdeploy:
+      - cloud_params
+      - cloud_password
+      - template_params
+      - source_vm
+      - destination_vm
+    deploy:
+      - cloud_params
+      - cloud_password
+      - source_vm
+      - destination_vm
+      - source_folder
+      - destination_folder
+      - vm_params
+    poweron:
+      - cloud_params
+      - cloud_password
+      - source_vm
+      - source_folder
+    poweroff:
+      - cloud_params
+      - cloud_password
+      - source_vm
+      - source_folder
+    shutdown:
+      - cloud_params
+      - cloud_password
+      - source_vm
+      - source_folder
+    get_facts:
+      - cloud_params
+      - cloud_password
+      - source_vm
+      - source_folder
+    wait_poweredoff:
+      - cloud_params
+      - cloud_password
+      - source_vm
+      - source_folder
+    destroy:
+      - cloud_params
+      - cloud_password
+      - source_vm
+      - source_folder
+
+  destroy_source: false
+  force_removal: false

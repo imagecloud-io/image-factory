@@ -1,0 +1,15 @@
+---
+# defaults file for imagecloud-hardening
+  required_variables:
+    - target
+
+  targets:
+    Windows:
+      - web
+      - base
+    RedHat:
+      - web
+      - base
+
+  iis_root: E:\inetpub\
+  iis_logdir: E:\logfiles\iis

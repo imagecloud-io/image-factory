@@ -1,0 +1,47 @@
+---
+
+  - name: Install updates, pass "{{ item }}"
+    win_updates:
+      category_names:
+        - Application
+        - Connectors
+        - CriticalUpdates
+        - DeveloperKits
+        - FeaturePacks
+        - Guidance
+        - SecurityUpdates
+        - ServicePacks
+        - Tools
+        - UpdateRollups
+        - Updates
+    register: UpdateResult
+    when: install_updates
+    ignore_errors: yes
+
+  - name: Show update results
+    debug:
+      var: UpdateResult
+
+  - name: Find out if the updates failed because of a scheduled tasks issue
+    set_fact:
+      task_start_failed: true
+    when: UpdateResult.module_stderr|default(" ") is search("Timed out waiting for scheduled task to start")
+
+  - name: Fail if updates fail and nothing was installed
+    fail:
+      msg: Something didn't work out installing updates
+    when: UpdateResult.failed|default(false)|bool == true and UpdateResult.installed_update_count|default(0) == 0 and task_start_failed|default(false)|bool == false and item > 3
+
+  - name: Determine if a reboot is required
+    set_fact:
+      do_reboot: "{{ UpdateResult.reboot_required|default(false)|bool == true or UpdateResult.failed|default(false)| bool == true or UpdateResult.error|default(false) or task_start_failed|default(false)|bool == true }}"
+    when: install_updates
+
+  - name: Reboot vm
+    win_reboot:
+      reboot_timeout_sec: 10800
+    when: do_reboot and install_updates
+
+  - set_fact:
+      install_updates: "{{ do_reboot }}"
+

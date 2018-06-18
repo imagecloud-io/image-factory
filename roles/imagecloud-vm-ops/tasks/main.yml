@@ -1,0 +1,20 @@
+---
+# tasks file for imagecloud-vm-ops
+
+- name: Validate action items
+  fail:
+    msg: "Action {{ action }} is not defined"
+  when: action not in required_variables
+
+- name: Set required_vars
+  set_fact:
+    required_vars: "{{ required_variables[action] }}"
+
+- name: VM operations | Validate required variables
+  fail:
+    msg: "No value specified for '{{ item }}'"
+  when: ({{ item }} is undefined) or ({{ item }} is defined and {{ item|trim == '' }})
+  with_items: "{{ required_variables[action] }}"
+
+- name: Do the real interesting stuff
+  include_tasks: "{{ cloud_params.type }}-{{ action }}.yml"

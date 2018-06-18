@@ -1,0 +1,4 @@
+---
+  - name: Use dev-sec.io's ansible-windows-hardening role
+    include_role:
+      name: ansible-windows-hardening

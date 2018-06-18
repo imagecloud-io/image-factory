@@ -1,0 +1,14 @@
+---
+- name: Remove working copy
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  roles:
+    - role: imagecloud-vm-ops
+      cloud_params: "{{ cloud_env[cloud] }}"
+      cloud_password: "{{ secrets[cloud].vcenter.password }}"
+      source_vm: "{{ base_templates[cloud_type][template].vm_name }}"
+      source_folder: "{{ cloud_env[cloud].packer_folder }}"
+      action: destroy
+

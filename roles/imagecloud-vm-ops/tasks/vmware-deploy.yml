@@ -1,0 +1,94 @@
+---
+  - name: Generate password and MS safe hostname
+    set_fact:
+      admin_password: "{{999999999999999999|random|to_uuid}}"
+      safe_hostname: "{{ destination_vm|valid_mshostname }}"
+
+  - name: Put safe hostname and password in dict
+    set_fact:
+      vm_params_merged: "{{ vm_params|combine({'customization': { 'hostname': safe_hostname, 'password': admin_password }}, recursive=True ) }}"
+    when: vm_params.customization is defined
+
+  - name: Skip safe hostname and password in dict when we're not customizing
+    set_fact:
+      vm_params_merged: "{{ vm_params }}"
+    when: vm_params.customization is undefined
+
+  - name: "Deploy {{ source_vm }} to {{ destination_folder }}/{{ destination_vm }}"
+    vmware_guest:
+      hostname              : "{{ cloud_params.vcenter.host }}"
+      username              : "{{ cloud_params.vcenter.username }}"
+      password              : "{{ cloud_password }}"
+      validate_certs        : "{{ cloud_params.vcenter.validate_certs }}"
+      datacenter            : "{{ cloud_params.vcenter.datacenter }}"
+      folder                : "/{{ cloud_params.vcenter.datacenter }}/vm/{{ destination_folder }}"
+      name                  : "{{ destination_vm }}"
+      template              : "{{ source_vm }}"
+      state                 : poweredon
+      wait_for_ip_address   : yes
+      annotation            : "{{ vm_params_merged.annotation|default(omit) }}"
+      cluster               : "{{ vm_params_merged.cluster|default(omit) }}"
+      customization         : "{{ vm_params_merged.customization|default(omit)}}"
+      customvalues          : "{{ vm_params_merged.customvalues|default(omit)}}"
+      disk                  : "{{ vm_params_merged.disk|default(omit)}}"
+      hardware              : "{{ vm_params_merged.hardware|default(omit)}}"
+      networks              : "{{ vm_params_merged.networks|default(omit)}}"
+      resource_pool         : "{{ vm_params_merged.resource_pool|default(omit)}}"
+      timezone              : "{{ vm_params_merged.timezone|default(omit)}}"
+
+  - name: Wait for real IP address
+    vmware_guest_facts_ex:
+      hostname: "{{ cloud_params.vcenter.host }}"
+      username: "{{ cloud_params.vcenter.username }}"
+      password: "{{ cloud_password }}"
+      validate_certs: "{{ cloud_params.vcenter.validate_certs }}"
+      datacenter: "{{ cloud_params.vcenter.datacenter }}"
+      folder: "/{{ cloud_params.vcenter.datacenter }}/vm/{{ destination_folder }}"
+      name: "{{ destination_vm }}"
+    register: vm_facts
+    ignore_errors: true
+    retries: 1000
+    until: vm_facts.instance.ipv4 == vm_params_merged.networks[0].ipaddress
+
+  - name: Add VM to inventory
+    add_host:
+      name: "{{ safe_hostname }}"
+      ansible_host: "{{ vm_facts.instance.ipv4 }}"
+      ansible_user: "Administrator"
+      ansible_password: "{{ admin_password }}"
+      ansible_port: 5986
+      ansible_connection: winrm
+      ansible_winrm_server_cert_validation: ignore
+      groups: vm_stager
+    no_log: true
+    when: vm_facts.instance.hw_guest_id is match("windows*")
+
+  - name: Domain join Windows
+    win_domain_membership_ex:
+      dns_domain_name: "{{ secrets.domain_user.upn_domain }}"
+      domain_admin_user: "{{ secrets.domain_user.username }}@{{ secrets.domain_user.upn_domain }}"
+      domain_admin_password: "{{ secrets.domain_user.password }}"
+      ou_path: "{{ vm_params_merged.customization.ou_path }}"
+      state: domain
+    delegate_to: "{{ safe_hostname }}"
+    when: vm_params_merged.customization.myjoindomain and vm_facts.instance.hw_guest_id is match("windows*")
+
+  - name: Reboot vm
+    win_reboot:
+      shutdown_timeout_sec: 3600
+      reboot_timeout_sec: 3600
+    delegate_to: "{{ safe_hostname }}"
+
+  - name: Wait for real IP address
+    vmware_guest_facts_ex:
+      hostname: "{{ cloud_params.vcenter.host }}"
+      username: "{{ cloud_params.vcenter.username }}"
+      password: "{{ cloud_password }}"
+      validate_certs: "{{ cloud_params.vcenter.validate_certs }}"
+      datacenter: "{{ cloud_params.vcenter.datacenter }}"
+      folder: "/{{ cloud_params.vcenter.datacenter }}/vm/{{ destination_folder }}"
+      name: "{{ destination_vm }}"
+    register: vm_facts
+    ignore_errors: true
+    retries: 1000
+    until: vm_facts.instance.ipv4 == vm_params_merged.networks[0].ipaddress

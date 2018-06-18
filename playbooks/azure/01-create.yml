@@ -1,0 +1,183 @@
+---
+- name: Start the template creation process (from scratch)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    base_dir: "{{ lookup('pipe', 'git rev-parse --show-toplevel') }}"
+    cloud_type: "{{ cloud_env[cloud].type }}"
+    last_commit: "{{ lookup('pipe', 'git log -n 1') }}"
+    timestamp: "{{ lookup('pipe', 'date +%s') }}"
+    vm_name: "{{ base_templates[cloud_type][template].vm_name }}"
+    os_type: "{{ base_templates[cloud_type][template].guest_os }}"
+
+  tasks:
+    - block:
+      - name: Create Azure VM from ARM template with public IP
+        azure_rm_deployment:
+          state: present
+          deployment_name: "{{ base_templates[cloud_type][template].vm_name }}-deployment"
+          location: "{{ cloud_env[cloud].location }}"
+          resource_group_name: "{{ cloud_env[cloud].resource_group_name }}"
+          client_id: "{{ cloud_env[cloud].client_id }}"
+          secret: "{{ secrets[cloud].client_secret }}"
+          subscription_id: "{{ cloud_env[cloud].subscription_id }}"
+          tenant: "{{ cloud_env[cloud].tenant_id }}"
+          wait_for_deployment_completion: yes
+          parameters:
+            adminUsername:
+              value: "{{ base_templates[cloud_type][template].admin_user }}"
+            adminPassword:
+              value: "{{ secrets.template.password }}"
+            adminPublicKey:
+              value: "{{ secrets.template.ssh_keys.contents }}"
+            dnsLabelPrefix:
+              value: "{{ base_templates[cloud_type][template].vm_name }}-public"
+            vmName:
+              value: "{{ base_templates[cloud_type][template].vm_name[0:14] }}"
+            nicName:
+              value: "{{ base_templates[cloud_type][template].vm_name }}-nic"
+            virtualNetworkName:
+              value: "{{ cloud_env[cloud].resource_group_name }}-templates"
+            publicIPAddressName:
+              value: "{{ base_templates[cloud_type][template].vm_name }}-publicip"
+            subnetName:
+              value: "{{ cloud_env[cloud].resource_group_name }}-subnet"
+            imagePublisher:
+              value: "{{ base_templates[cloud_type][template].image_publisher }}"
+            imageOffer:
+              value: "{{ base_templates[cloud_type][template].image_offer }}"
+            imageSku:
+              value: "{{ base_templates[cloud_type][template].image_sku }}"
+            imageVersion:
+              value: "latest"
+            vmSize:
+              value: "{{ base_templates[cloud_type][template].vm_size }}"
+            storageAccountType:
+              value: "{{ base_templates[cloud_type][template].storage_type }}"
+            dataDiskGB:
+              value: "{{ base_templates[cloud_type][template].data_disk_gb }}"
+            dataDiskHostCaching:
+              value: "{{ base_templates[cloud_type][template].data_disk_cache }}"
+          template: "{{ lookup('template', base_dir + '/include/azure/imagecloud-azure-{{ os_type }}-public.j2.json') }}"
+        register: _vm_facts
+
+      - name: Set public IP address
+        set_fact:
+          azure_vm_ip: "{{ _vm_facts.deployment.instances[0].ips[0].public_ip}}"
+
+      when: cloud_env[cloud].public_ips|bool
+
+    - block:
+      - name: Create Azure VM from ARM template without public IP
+        azure_rm_deployment:
+          state: present
+          deployment_name: "{{ base_templates[cloud_type][template].vm_name }}-deployment"
+          location: "{{ cloud_env[cloud].location }}"
+          resource_group_name: "{{ cloud_env[cloud].resource_group_name }}"
+          client_id: "{{ cloud_env[cloud].client_id }}"
+          secret: "{{ secrets[cloud].client_secret }}"
+          subscription_id: "{{ cloud_env[cloud].subscription_id }}"
+          tenant: "{{ cloud_env[cloud].tenant_id }}"
+          wait_for_deployment_completion: yes
+          parameters:
+            adminUsername:
+              value: "{{ base_templates[cloud_type][template].admin_user }}"
+            adminPassword:
+              value: "{{ secrets.template.password }}"
+            adminPublicKey:
+              value: "{{ secrets.template.ssh_keys.contents }}"
+            vmName:
+              value: "{{ base_templates[cloud_type][template].vm_name[0:14] }}"
+            nicName:
+              value: "{{ base_templates[cloud_type][template].vm_name }}-nic"
+            virtualNetworkName:
+              value: "{{ cloud_env[cloud].vnet_name }}"
+            vnetResourceGroup:
+              value: "{{ cloud_env[cloud].vnet_resourcegroup }}"
+            addressPrefix:
+              value: "{{ cloud_env[cloud].address_prefix }}"
+            subnetName:
+              value: "{{ cloud_env[cloud].subnet_name }}"
+            subnetPrefix:
+              value: "{{ cloud_env[cloud].subnet_prefix }}"
+            imagePublisher:
+              value: "{{ base_templates[cloud_type][template].image_publisher }}"
+            imageOffer:
+              value: "{{ base_templates[cloud_type][template].image_offer }}"
+            imageSku:
+              value: "{{ base_templates[cloud_type][template].image_sku }}"
+            imageVersion:
+              value: "latest"
+            vmSize:
+              value: "{{ base_templates[cloud_type][template].vm_size }}"
+            storageAccountType:
+              value: "{{ base_templates[cloud_type][template].storage_type }}"
+            dataDiskGB:
+              value: "{{ base_templates[cloud_type][template].data_disk_gb }}"
+            dataDiskHostCaching:
+              value: "{{ base_templates[cloud_type][template].data_disk_cache }}"
+          template: "{{ lookup('template', base_dir + '/include/azure/imagecloud-azure-{{ os_type }}-private.j2.json') }}"
+
+      - name: Get Network interface facts
+        azure_rm_networkinterface_facts:
+          resource_group: "{{ cloud_env[cloud].resource_group_name }}"
+          client_id: "{{ cloud_env[cloud].client_id }}"
+          secret: "{{ secrets[cloud].client_secret }}"
+          subscription_id: "{{ cloud_env[cloud].subscription_id }}"
+          tenant: "{{ cloud_env[cloud].tenant_id }}"
+          name: "{{ base_templates[cloud_type][template].vm_name }}-nic"
+        register: _nic_facts
+
+      - name: Set private IP address
+        set_fact:
+          azure_vm_ip: "{{ _nic_facts.ansible_facts.azure_networkinterfaces[0].properties.ipConfigurations[0].properties.privateIPAddress }}"
+
+      when: not cloud_env[cloud].public_ips|bool
+
+    - name: Add Windows VM to inventory
+      add_host:
+        name: "{{ base_templates[cloud_type][template].vm_name }}"
+        ansible_host: "{{ azure_vm_ip }}"
+        ansible_user: "{{ base_templates[cloud_env[cloud].type][ template ].admin_user }}"
+        ansible_password: "{{ secrets.template.password }}"
+        ansible_port: 5986
+        ansible_connection: winrm
+        ansible_winrm_server_cert_validation: ignore
+        ansible_winrm_operation_timeout_sec: 120
+        ansible_winrm_read_timeout_sec: 150
+        groups: vm_stager_windows
+      no_log: true
+      when: base_templates[cloud_env[cloud].type][template].guest_os is match("windows*")
+
+    - name: Add Linux VM to inventory
+      add_host:
+        name: "{{ base_templates[cloud_type][template].vm_name }}"
+        ansible_host: "{{ azure_vm_ip }}"
+        ansible_user: "{{ base_templates[cloud_env[cloud].type][ template ].admin_user }}"
+        ansible_password: "{{ secrets.template.password }}"
+        ansible_become: yes
+        ansible_become_password: "{{ secrets.template.password }}"
+        groups: vm_stager_linux
+      no_log: true
+      when: not base_templates[cloud_env[cloud].type][ template ].guest_os is match("windows*")
+
+    - name: Test WinRM (avoid the dreaded 500 error)
+      uri:
+        url: "https://{{ azure_vm_ip }}:5986/wsman/"
+        return_content: yes
+        body: '<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope" xmlns:wsmid="http://schemas.dmtf.org/wbem/wsman/identity/1/wsmanidentity.xsd"><s:Header/><s:Body><wsmid:Identify/></s:Body></s:Envelope>'
+        method: POST
+        body_format: raw
+        validate_certs: no
+        follow_redirects: all
+        headers:
+          Content-Type: 'application/soap+xml;charset=UTF-8'
+        status_code: 100,101,200,201,202,203,204,205,206,207,300,301,302,303,304,305,306,307,308,400,401,402,403,404,500,501,502,503
+        user: "{{ base_templates[cloud_env[cloud].type][ template ].admin_user }}"
+        password: "{{ secrets.template.password }}"
+      register: _uri_result
+      retries: 100
+      until: _uri_result.status in [ 200 ]
+      when: base_templates[cloud_env[cloud].type][template].guest_os is match("windows*")

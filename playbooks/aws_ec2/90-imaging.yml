@@ -1,0 +1,69 @@
+---
+- name: Sysprep time!
+  hosts: vm_stager_windows
+  gather_facts: true
+
+  tasks:
+    - name: Make sure there is no default unattend.xml
+      win_file:
+        path: c:\windows\system32\sysprep\unattend.xml
+        state: absent
+
+    - name: Delete Packages directory
+      win_file:
+        path: c:\Packages
+        state: absent
+
+    - name: Prepare sysprep in AWS
+      win_command: powershell.exe -File ./InitializeInstance.ps1 -Schedule
+      args:
+        chdir: C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts
+      ignore_errors: yes
+
+    - name: Run sysprep with AWS defaults (it's good enough for now)
+      win_command: powershell.exe -File ./SysprepInstance.ps1
+      args:
+        chdir: C:\ProgramData\Amazon\EC2-Windows\Launch\Scripts
+      ignore_errors: yes
+
+- name: Capture AMI
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Wait for VM to be powered off
+      wait_for:
+        port: 5986
+        delay: 20
+        state: stopped
+        host: "{{ instance_ip_address }}"
+      when: base_templates[cloud_env[cloud].type][template].guest_os is match("windows*")
+
+    - name: Stop EC2 instance
+      ec2_instance:
+        aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
+        aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
+        name: "{{ base_templates[cloud_env[cloud].type][template].vm_name }}"
+        region: "{{ cloud_env[cloud].region }}"
+        vpc_subnet_id: "{{ cloud_env[cloud].subnet_id }}"
+        wait: true
+        state: stopped
+
+    - name: Capture AMI
+      ec2_ami:
+        aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
+        aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
+        description: "{{ last_commit }}"
+        instance_id: "{{ ec2_instance.instances[0].instance_id }}"
+        region: "{{ cloud_env[cloud].region }}"
+        name: "{{ template + '-candidate-'+ timestamp }}"
+        enhanced_networking: "{{ base_templates[cloud_env[cloud].type][template].ena_enabled|default(false|bool) }}"
+        wait: true
+        state: present
+        launch_permissions:
+          user_ids: "{{ cloud_env[cloud].launch_ids }}"
+      register: ami_info
+
+
+

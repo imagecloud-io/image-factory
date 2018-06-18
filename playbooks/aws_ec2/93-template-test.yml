@@ -1,0 +1,121 @@
+---
+- name: Deploy templates on Azure for testing
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Deploy instance from fresh AMI
+      ec2_instance:
+        aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
+        aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
+        key_name: "{{ cloud_env[cloud].keypair }}"
+        name: "{{ 'test' + base_templates[cloud_env[cloud].type][template].vm_name  }}"
+        security_group: "{{ cloud_env[cloud].sec_group }}"
+        instance_type: "{{ base_templates[cloud_env[cloud].type][template].instance_type }}"
+        image_id: "{{ ami_info.image_id }}"
+        region: "{{ cloud_env[cloud].region }}"
+        user_data: "{{ lookup('template', base_dir + '/' + base_templates[cloud_env[cloud].type][template].user_data ) }}"
+        vpc_subnet_id: "{{ cloud_env[cloud].subnet_id }}"
+        wait: true
+        state: present
+      register: ec2_test_instance
+
+    - name: Pick correct IP address to add to inventory
+      set_fact:
+        test_instance_ip_address: "{{ cloud_env[cloud].use_private_ip|default(false)|ternary(ec2_test_instance.instances[0].private_ip_address,ec2_test_instance.instances[0].public_ip_address) }}"
+
+    - name: Add Windows VM to inventory
+      add_host:
+        name: "{{ base_templates[cloud_env[cloud].type][template].vm_name }}"
+        ansible_host: "{{ test_instance_ip_address }}"
+        ansible_user: "{{ base_templates[cloud_env[cloud].type][ template ].admin_user }}"
+        ansible_password: "{{ win_pass }}"
+        ansible_port: 5986
+        ansible_connection: winrm
+        ansible_winrm_server_cert_validation: ignore
+        ansible_winrm_operation_timeout_sec: 120
+        ansible_winrm_read_timeout_sec: 150
+        groups: vm_baseline_test
+      no_log: true
+      when: base_templates[cloud_env[cloud].type][template].guest_os is match("windows*")
+
+    - name: Add Linux VM to inventory
+      add_host:
+        name: "{{ base_templates[cloud_type][template].vm_name }}"
+        ansible_host: "{{ test_instance_ip_address }}"
+        ansible_user: "{{ base_templates[cloud_env[cloud].type][ template ].admin_user }}"
+        ansible_ssh_private_key_file: "{{ base_dir }}/.secrets/factory"
+        ansible_become: yes
+        groups: vm_baseline_test
+      no_log: true
+      when: not base_templates[cloud_env[cloud].type][ template ].guest_os is match("windows*")
+
+- name: Run baseline
+  hosts: vm_baseline_test
+  gather_facts: false
+
+  vars:
+    base_dir: "{{ lookup('pipe', 'git rev-parse --show-toplevel') }}"
+
+  pre_tasks:
+    - name: Wait for OS response
+      wait_for_connection:
+        delay: 120
+        timeout: 1200
+
+  roles:
+    - role: imagecloud-sec-baseline
+      admin_user: "{{ base_templates[cloud_env[cloud].type][ template ].admin_user }}"
+      admin_password: "{{ hostvars['localhost']['win_pass'] }}"
+      admin_key: "{{ base_dir }}/.secrets/factory"
+      baseline_accept: "{{ base_templates[cloud_env[cloud].type][ template ].baseline_accept }}"
+      register: baseline_failed
+
+  post_tasks:
+    - name: Make sure baseline result is not forgotten
+      set_fact:
+        baseline_compliant: "{{ not baseline_failed }}"
+      delegate_to: localhost
+      delegate_facts: yes
+
+- name: Remove Test VM
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  post_tasks:
+    - name: Remove the instance
+      ec2_instance:
+        aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
+        aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
+        name: "{{ 'test' + base_templates[cloud_env[cloud].type][template].vm_name  }}"
+        region: "{{ cloud_env[cloud].region }}"
+        vpc_subnet_id: "{{ cloud_env[cloud].subnet_id }}"
+        wait: true
+        state: terminated
+
+    - name: The test failed, we need to clean up
+      block:
+
+      - name: Delete failed candidate AMI
+        ec2_ami:
+          aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
+          aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
+          image_id: "{{ ami_info.image_id }}"
+          region: "{{ cloud_env[cloud].region }}"
+          delete_snapshot: yes
+          state: absent
+
+      - name: Give final message
+        fail:
+          msg: Template does not comply with hardening requirements. It has been deleted.
+
+      when: not baseline_compliant
+
+    - name: Give final message
+      debug:
+        msg: Template complies with hardening requirements.
+      when: baseline_compliant
+
+

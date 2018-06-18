@@ -1,0 +1,11 @@
+<powershell>
+
+net stop w32time
+w32tm /config /syncfromflags:manual /manualpeerlist:"169.254.169.123"
+w32tm /config /reliable:yes
+net start w32time
+
+$admin = [adsi]("WinNT://./administrator, user")
+$admin.PSBase.Invoke("SetPassword", "{{ win_pass }}")
+Invoke-Expression ((New-Object System.Net.Webclient).DownloadString('https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1'))
+</powershell>

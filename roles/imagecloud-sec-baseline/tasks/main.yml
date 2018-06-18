@@ -1,0 +1,127 @@
+---
+  - name: imagecloud-sec-baseline | Validate required variables
+    fail:
+      msg: "No value specified for '{{ item }}'"
+    when: ({{ item }} is undefined) or ({{ item }} is defined and {{ item|trim == '' }})
+    with_items: "{{ required_variables }}"
+
+  - name: Find inspec executable in the most likely places
+    set_fact:
+      inspec_binary: "{{ item }}"
+    with_first_found:
+      - /usr/bin/inspec
+      - /usr/local/bin/inspec
+      - /opt/inspec/embedded/bin/inspec
+    delegate_to: localhost
+
+  - name: Create temporary directory
+    tempfile:
+      state: directory
+      prefix: devsec
+    changed_when: False
+    register: _tmpdir
+    delegate_to: localhost
+
+  - name: Set temp dir
+    set_fact:
+      tmpdir: "{{ _tmpdir.path }}"
+    delegate_to: localhost
+
+  - name: Include OS-Specific variables
+    include_vars: "{{ ansible_os_family }}.yml"
+
+  - name: Set version for inspec
+    set_fact:
+      inspec_git_ver: "HEAD"
+
+  - name: Clone dev-sec repo into tmpdir
+    git:
+      repo: "{{ devsec_repo }}"
+      dest: "{{ tmpdir }}"
+      version: "{{ inspec_git_ver }}"
+    delegate_to: localhost
+
+  - name: Create Windows inspec command line
+    set_fact:
+      command_line: "{{ inspec_binary +' exec '+ tmpdir +' -b winrm --ssl --self-signed --host '+ hostvars[inventory_hostname].ansible_host +' --user '+ admin_user +' --password '+ admin_password +' --reporter=json-min' }}"
+    when: ansible_os_family in [ "Windows" ]
+
+  - name: Create Linux inspec command line with passwourd auth
+    set_fact:
+      command_line: "{{ inspec_binary +' exec '+ tmpdir+ ' -b ssh --sudo --host '+ hostvars[inventory_hostname].ansible_host +' --user '+ admin_user +' --password '+ admin_password +' --reporter=json-min' }}"
+    when: ansible_os_family in [ "RedHat", "Debian", "Ubuntu" ] and cloud_type in [ "vmware" ]
+
+  - name: Create Linux inspec command line with certificate auth
+    set_fact:
+      command_line: "{{ inspec_binary +' exec '+ tmpdir+ ' -b ssh --sudo --host '+ hostvars[inventory_hostname].ansible_host +' --user '+ admin_user +' --key-files '+ admin_key +' --reporter=json-min' }}"
+    when: ansible_os_family in [ "RedHat", "Debian", "Ubuntu" ] and cloud_type not in [ "vmware" ]
+
+  - name: Run inspec
+    command: "{{ command_line }}"
+    when: true
+    delegate_to: localhost
+    register: _out
+    ignore_errors: True
+
+  - name: Debug _out
+    debug:
+      var: _out
+
+  - name: Capture Inspec results
+    set_fact:
+      inspec_results_struct: "{{ _out.stdout|from_json() }}"
+
+  - name: Capture Inspec results
+    set_fact:
+      inspec_results: "{{ inspec_results_struct.controls }}"
+
+#  - name: Flatten inspec_results list
+#    set_fact:
+#      inspec_results: "{{ inspec_results|default([]) + item }}"
+#    with_flattened: "{{ inspec_results_list }}"
+
+  - name: Capture failed controls
+    set_fact:
+      failed_controls: "{{ inspec_results|selectattr('status','equalto','failed')|list }}"
+
+  - name: Set baseline_failed to false by default
+    set_fact:
+      baseline_failed: false
+
+  - block:
+    - name: Display results
+      debug:
+        msg: "{{ failed_controls|default([])|count }} out of {{inspec_results|default([])|count}} checks have failed!"
+
+    - name: Display accepted risks
+      debug:
+        msg: "We accept the following risks: {{ baseline_accept|default([]) }}"
+
+    - name: Expand accepted risks
+      set_fact:
+        accept_risk_list: "{{ accept_risk_list|default([]) + [ item[0] ] }}"
+      with_nested:
+        - "{{ failed_controls|default([]) }}"
+        - "{{ baseline_accept|default([]) }}"
+      when: item[0].id == item[1]
+
+    - name: Get really failed controls
+      set_fact:
+        really_failed_controls: "{{ failed_controls|difference(accept_risk_list) }}"
+
+    - name: Display detailed results
+      debug:
+        msg: "{{ really_failed_controls|default([]) }}"
+
+    - name: Set error var when there are failed controls
+      set_fact:
+        baseline_failed: true
+      when: really_failed_controls|default([])|count > 0
+
+    when: failed_controls|default([])|count > 0
+
+  - name: Remove temp tools directory
+    file:
+      path: "{{ tmpdir }}"
+      state: absent
+    delegate_to: localhost

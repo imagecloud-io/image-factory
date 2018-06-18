@@ -1,0 +1,55 @@
+---
+- name: Cleanup stuff
+  hosts: localhost
+  gather_facts: true
+
+  vars:
+    base_dir: "{{ lookup('pipe', 'git rev-parse --show-toplevel') }}"
+
+  tasks:
+    - name: Remove the instance
+      ec2_instance:
+        aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
+        aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
+        name: "{{ base_templates[cloud_env[cloud].type][template].vm_name }}"
+        vpc_subnet_id: "{{ cloud_env[cloud].subnet_id }}"
+        region: "{{ cloud_env[cloud].region }}"
+        wait: true
+        state: terminated
+
+    - name: Remove the test instance
+      ec2_instance:
+        aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
+        aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
+        name: "{{ 'test' + base_templates[cloud_env[cloud].type][template].vm_name }}"
+        vpc_subnet_id: "{{ cloud_env[cloud].subnet_id }}"
+        region: "{{ cloud_env[cloud].region }}"
+        wait: true
+        state: terminated
+
+    - name: Remove keypair
+      ec2_key:
+        aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
+        aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
+        name: "{{ cloud_env[cloud].keypair }}"
+        region: "{{ cloud_env[cloud].region }}"
+        state: absent
+
+    - name: Remove security group
+      ec2_group:
+        aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
+        aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
+        name: "{{ cloud_env[cloud].sec_group }}"
+        region: "{{ cloud_env[cloud].region }}"
+        state: absent
+
+    - name: Remove private key file
+      file:
+        path: "{{ base_dir }}/.secrets/factory"
+        state: absent
+
+    - name: Remove `secrets` directory
+      file:
+        path: "{{ base_dir }}/.secrets"
+        state: absent
+

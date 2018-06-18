@@ -1,0 +1,52 @@
+
+  - name: "Power Off destination VM ({{ destination_vm }}) if it exists"
+    vmware_guest:
+      hostname: "{{ cloud_params.vcenter.host }}"
+      username: "{{ cloud_params.vcenter.username }}"
+      password: "{{ cloud_password }}"
+      validate_certs: "{{ cloud_params.vcenter.validate_certs }}"
+      datacenter: "{{ cloud_params.vcenter.datacenter }}"
+      folder: "/{{ destination_datacenter|default(cloud_params.vcenter.datacenter) }}/vm/{{ destination_folder }}"
+      name: "{{ destination_vm }}"
+      state: poweredoff
+    when: force_removal|default(false)
+    ignore_errors: yes
+    changed_when: false
+
+  - name: "Remove destination VM ({{ destination_vm }}) if it exists"
+    vmware_guest:
+      hostname: "{{ cloud_params.vcenter.host }}"
+      username: "{{ cloud_params.vcenter.username }}"
+      password: "{{ cloud_password }}"
+      validate_certs: "{{ cloud_params.vcenter.validate_certs }}"
+      datacenter: "{{ cloud_params.vcenter.datacenter }}"
+      folder: "/{{ destination_datacenter|default(cloud_params.vcenter.datacenter) }}/vm/{{ destination_folder }}"
+      name: "{{ destination_vm }}"
+      state: absent
+
+  - name: "Clone {{ source_vm }} to {{ destination_folder }}/{{ destination_vm }}"
+    vmware_guest:
+      hostname: "{{ cloud_params.vcenter.host }}"
+      username: "{{ cloud_params.vcenter.username }}"
+      password: "{{ cloud_password }}"
+      validate_certs: "{{ cloud_params.vcenter.validate_certs }}"
+      esxi_hostname: "{{ destination_host|default(omit) }}"
+      datacenter: "{{ destination_datacenter|default(cloud_params.vcenter.datacenter) }}"
+      folder: "/{{ destination_datacenter|default(cloud_params.vcenter.datacenter) }}/vm/{{ destination_folder }}"
+      name: "{{ destination_vm }}"
+      disk: "{{ destination_disk|default(omit) }}"
+      annotation: "{{ vm_annotation|default(omit) }}"
+      state: poweredoff
+      template: "{{ source_vm }}"
+
+  - name: "Remove source VM ({{ source_vm }}) if it exists"
+    vmware_guest:
+      hostname: "{{ cloud_params.vcenter.host }}"
+      username: "{{ cloud_params.vcenter.username }}"
+      password: "{{ cloud_password }}"
+      validate_certs: "{{ cloud_params.vcenter.validate_certs }}"
+      datacenter: "{{ cloud_params.vcenter.datacenter }}"
+      folder: "/{{ cloud_params.vcenter.datacenter }}/vm/{{ source_folder }}"
+      name: "{{ source_vm }}"
+      state: absent
+    when: destroy_source|default(false)

@@ -1,0 +1,8 @@
+---
+# defaults file for imagecloud-libraries
+
+# TODO: get rid of cloud_params and split into proxy and wsus
+
+  required_variables:
+    - cloud_params
+

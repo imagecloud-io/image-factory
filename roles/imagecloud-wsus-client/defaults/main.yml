@@ -1,0 +1,21 @@
+---
+  wsus_client_enable: yes
+  wsus_client_server: http://wsusserver.local
+  wsus_client_detection_frequency: 1
+  wsus_client_reboot_warning_timeout: 15
+  wsus_client_reboot_launch_timeout: 5
+  wsus_client_schedule_install_day: Everyday
+  wsus_client_target_group: baseline
+
+  wsus_set_client_args_raw:
+    - "-Computername {{ ansible_hostname }}"
+    - "-UpdateServer {{ wsus_client_server }}"
+    - "-UseWSUSServer {{ wsus_client_enable|default('yes')|bool|ternary('Enable','Disable') }}"
+    - "-AllowAutomaticUpdates {{ wsus_client_allow_automatic_updates|default('on')|bool|ternary('Enable','Disable') }}"
+    - "-ElevateNonAdmins {{ wsus_client_elevate_non_admins|default('no')|bool|ternary('Enable','Disable') }}"
+    - "-ScheduleInstallDay {{ wsus_client_schedule_install_day|default('Everyday') }}"
+    - "-Options {{ wsus_client_options|default('DownloadOnly') }}"
+    - "-AutoInstallMinorUpdates {{ wsus_client_auto_install_minor_updates|default('no')|bool|ternary('Enable','Disable') }}"
+    - "-AutoRebootWithLoggedOnUsers {{ wsus_client_auto_reboot_with_logged_on_users|default('no')|bool|ternary('Enable','Disable') }}"
+
+  required_variables: []

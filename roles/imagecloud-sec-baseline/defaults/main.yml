@@ -1,0 +1,6 @@
+---
+# defaults file for imagecloud-sec-baseline
+
+required_variables:
+  - admin_user
+  - baseline_accept

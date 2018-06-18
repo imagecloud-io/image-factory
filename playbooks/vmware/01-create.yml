@@ -1,0 +1,172 @@
+---
+- name: Start the template creation process (from scratch)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  pre_tasks:
+
+    - name: Set base variables
+      set_fact:
+        base_dir: "{{ lookup('pipe', 'git rev-parse --show-toplevel') }}"
+        cloud_type: "{{ cloud_env[cloud].type }}"
+        template_name: "{{ base_templates[cloud_type][template].vm_name }}"
+        last_commit: "{{ lookup('pipe', 'git log -n 1') }}"
+
+    - name: Set vmware buildhost
+      set_fact:
+        buildhost: "{{ cloud_env[cloud].buildhost.builders|random }}"
+
+    - name: Find packer executable in the most likely places
+      set_fact:
+        packer_binary: "{{ item }}"
+      with_first_found:
+        - /usr/local/sbin/packer
+      delegate_to: localhost
+
+    - name: Get facts for vmware buildhost
+      set_fact:
+        buildhost_facts: "{{ cloud_env[cloud].buildhost[buildhost] }}"
+
+    - name: Add ESXi host to inventory
+      add_host:
+        name: "{{ cloud_env[cloud].buildhost[buildhost].hostname }}"
+        ansible_host: "{{ cloud_env[cloud].buildhost[buildhost].hostname }}"
+        ansible_user: "{{ cloud_env[cloud].buildhost[buildhost].username }}"
+        ansible_password: "{{ secrets[cloud].esxi.password }}"
+        groups: esxi
+      no_log: true
+
+    - name: Create temp dir for packer config
+      tempfile:
+        state: directory
+        prefix: packer
+      changed_when: False
+      register: _tmpdir
+
+    - name: Set temp dir
+      set_fact:
+        tmpdir: "{{ _tmpdir.path }}"
+
+    - name: Create packer config file
+      template:
+        src: "{{ base_dir }}/include/packer/builders/{{ base_templates[cloud_type][template].packer_template }}"
+        dest: "{{ tmpdir }}/packer.json"
+
+    - name: Create autounattend file
+      template:
+        src: "{{ base_dir }}/include/packer/answer_files/{{ base_templates[cloud_type][template].answer_template }}"
+        dest: "{{ tmpdir }}/{{ base_templates[cloud_type][template].answer_file }}"
+
+    - name: Run packer
+      command: "{{ packer_binary + ' build ' +  tmpdir + '/packer.json' }}"
+      register: _packer
+      when: true
+
+    - name: Remove temp dir
+      file:
+        path: "{{ tmpdir }}"
+        state: absent
+
+    - name: Show packer output
+      debug:
+        var: _packer
+
+    - block:
+      - name: Get raw list of VMs on ESXi
+        command: vim-cmd vmsvc/getallvms
+        register: vm_list
+
+      - name: Create ESXi inventory dictionary
+        set_fact:
+          esxi_inventory: "{{ esxi_inventory|default({})|combine(
+                             { item|tblsplit(1)|trim:
+                               {
+                                'vmid': item|tblsplit(0)|trim,
+                                'path': item|tblsplit(2)|trim|regex_replace('\\[(.*)\\] (.*)$','/vmfs/volumes/\\1/\\2'),
+                                'guest': item|tblsplit(3)|trim,
+                                'version': item|tblsplit(4)|trim,
+                                'annotation': item|tblsplit(5)|trim,
+                               }
+                             } )
+                           }}"
+        with_items: "{{ vm_list.stdout_lines  }}"
+
+      - name: Unregister VM
+        command: vim-cmd vmsvc/unregister "{{ esxi_inventory[template_name]['vmid'] }}"
+
+      - name: Remove virtual CD-ROM from virtual CD Drive
+        lineinfile:
+          path: "/{{ esxi_inventory[template_name]['path'] }}"
+          regexp: "{{ item.search }}"
+          line: "{{ item.replace }}"
+        with_items:
+          - search: ^ide1:0\.start[cC]onnected = .+
+            replace: ide1:0.startConnected = "FALSE"
+          - search: ^ide1:0\.device[tT]ype = .+
+            replace: ide1:0.devicetype = "atapi-cdrom"
+          - search: ^ide1:0\.file[nN]ame = .+
+            replace: ide1:0.filename = "CD-ROM 1"
+          - search: ^ide1:0\.client[dD]evice = .+
+            replace: ide1:0.clientDevice = "TRUE"
+
+      - name: Register VM
+        command: vim-cmd solo/registervm "{{ esxi_inventory[template_name]['path'] }}"
+
+      - name: Take it easy
+        wait_for:
+          timeout: 20
+
+      delegate_to: "{{ cloud_env[cloud].buildhost[buildhost].hostname }}"
+
+
+  roles:
+    - role: imagecloud-vm-ops
+      cloud_params: "{{ cloud_env[cloud] }}"
+      cloud_password: "{{ secrets[cloud].vcenter.password }}"
+      source_vm: "{{ base_templates[cloud_type][template].vm_name }}"
+      source_folder: "{{ cloud_env[cloud].packer_folder }}"
+      action: poweron
+
+  post_tasks:
+    - name: Get VM IP address
+      shell: esxcli network vm port list -w $(ps | grep "vmm0:{{ base_templates[cloud_type][template].vm_name }}" | cut -d' ' -f 1) | grep "IP Address" | cut -d' ' -f 6
+      register: _vm_ip_address
+      retries: 100
+      until: _vm_ip_address.stdout != "" and _vm_ip_address.stdout != "0.0.0.0" and not _vm_ip_address.stdout is match("169\.254\.*")
+      delegate_to: "{{ cloud_env[cloud].buildhost[buildhost].hostname }}"
+      when: yes
+
+    - name: Get IP address for VM (VMware)
+      set_fact:
+        vm_ip_address: "{{ _vm_ip_address.stdout }}"
+
+    - name: Add Windows VM to inventory
+      add_host:
+        name: "{{ base_templates[cloud_type][template].vm_name }}"
+        ansible_host: "{{ vm_ip_address }}"
+        ansible_user: "{{ base_templates[cloud_env[cloud].type][ template ].admin_user }}"
+        ansible_password: "{{ secrets.template.password }}"
+        ansible_port: 5986
+        ansible_connection: winrm
+        ansible_winrm_server_cert_validation: ignore
+        ansible_winrm_operation_timeout_sec: 120
+        ansible_winrm_read_timeout_sec: 150
+        groups: vm_stager_windows
+      no_log: true
+      when: base_templates[cloud_env[cloud].type][template].guest_os is match("windows*")
+
+    - name: Add Linux VM to inventory
+      add_host:
+        name: "{{ base_templates[cloud_type][template].vm_name }}"
+        ansible_host: "{{ vm_ip_address }}"
+        ansible_user: "{{ base_templates[cloud_env[cloud].type][ template ].admin_user }}"
+        ansible_password: "{{ secrets.template.password }}"
+        ansible_become: yes
+        groups: vm_stager_linux
+      no_log: true
+      when: not base_templates[cloud_env[cloud].type][ template ].guest_os is match("windows*")
+
+    - name: Take it easy
+      wait_for:
+        timeout: 20

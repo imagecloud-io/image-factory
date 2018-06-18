@@ -1,0 +1,2 @@
+Import-Module {{ tmp_dir }}\Set-ClientWSUSSetting.ps1 -Force
+Set-ClientWSUSSetting {{ wsus_set_client_args_raw|join(' ') }}

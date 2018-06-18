@@ -1,0 +1,28 @@
+---
+- name: Move tested template to destination
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    template_candidate: "candidate"
+    template_name: "basic"
+
+  pre_tasks:
+    - name: Set base variables
+      set_fact:
+        base_dir: "{{ lookup('pipe', 'git rev-parse --show-toplevel') }}"
+        destination_template: "{{ newest_template|regex_replace('^(.+)-'+template_candidate+'-(.+)$','\\1-'+template_name+'-\\2') }}"
+
+  roles:
+    - role: imagecloud-vm-ops
+      cloud_params: "{{ cloud_env[cloud] }}"
+      cloud_password: "{{ secrets[cloud].vcenter.password }}"
+      source_vm: "{{ newest_template }}"
+      source_folder: "{{ cloud_env[cloud].build_folder }}"
+      destination_vm: "{{ newest_template }}"
+      destination_folder: "{{ cloud_env[cloud].template_folder }}"
+      destination_datacenter: "{{ cloud_env[cloud].vcenter.dest_datacenter }}"
+      destination_host: "{{ cloud_env[cloud].vcenter.dest_host }}"
+      action: clone
+      destroy_source: yes

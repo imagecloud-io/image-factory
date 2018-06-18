@@ -1,0 +1,37 @@
+---
+- name: Run local tasks
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    base_dir: "{{ lookup('pipe', 'git rev-parse --show-toplevel') }}"
+
+  tasks:
+    - name: tasks to be run locally
+      include_tasks: "{{ item }}"
+      loop: "{{ query('fileglob', base_dir + '/playbooks/custom/local/*.yml')|sort }}"
+
+- name: Run windows tasks
+  hosts: vm_stager_windows
+  gather_facts: true
+
+  vars:
+    base_dir: "{{ lookup('pipe', 'git rev-parse --show-toplevel') }}"
+
+  tasks:
+    - name: tasks to be run on Windows
+      include_tasks: "{{ item }}"
+      loop: "{{ query('fileglob', base_dir + '/playbooks/custom/windows/*.yml')|sort }}"
+
+- name: Run linux tasks
+  hosts: vm_stager_linux
+  gather_facts: true
+
+  vars:
+    base_dir: "{{ lookup('pipe', 'git rev-parse --show-toplevel') }}"
+
+  tasks:
+    - name: tasks to be run on Linux
+      include_tasks: "{{ item }}"
+      loop: "{{ query('fileglob', base_dir + '/playbooks/custom/linux/*.yml')|sort }}"

@@ -1,0 +1,31 @@
+---
+- name: Install agents on Windows VM
+  hosts: vm_stager_windows
+  gather_facts: false
+
+  tasks:
+    - name: We don't need to do anything
+      debug:
+        msg: Skipping...
+
+
+- name: Install agents on Linux VM
+  hosts: vm_stager_linux
+  gather_facts: false
+
+  tasks:
+    - name: Install Amazon SSM
+      block:
+
+      - name: Get and install SSM package
+        yum:
+          name: "https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm"
+          state: "{{ 'latest' }}"
+
+      - name: Make sure amazon-ssm-is started and starts automatically
+        service:
+          name: amazon-ssm-agent
+          enabled: yes
+        state: running
+
+      when: ansible_os_family == 'RedHat' and not ansible_distribution == 'Amazon'

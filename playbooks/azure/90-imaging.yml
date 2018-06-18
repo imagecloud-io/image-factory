@@ -1,0 +1,65 @@
+---
+- name: Sysprep time!
+  hosts: vm_stager_windows
+  gather_facts: true
+
+  tasks:
+    - name: Make sure there is no default unattend.xml
+      win_file:
+        path: c:\windows\system32\sysprep\unattend.xml
+        state: absent
+
+    - name: Delete VM Extension
+      azure_rm_virtualmachine_extension:
+        name: EnableWinRM
+        client_id: "{{ cloud_env[cloud].client_id }}"
+        secret: "{{ secrets[cloud].client_secret }}"
+        subscription_id: "{{ cloud_env[cloud].subscription_id }}"
+        tenant: "{{ cloud_env[cloud].tenant_id }}"
+        resource_group: "{{ cloud_env[cloud].resource_group_name }}"
+        virtual_machine_name: "{{ base_templates[cloud_type][template].vm_name }}"
+        state: absent
+      delegate_to: localhost
+
+    - name: Delete Packages directory
+      win_file:
+        path: c:\Packages
+        state: absent
+
+    - name: Run sysprep
+      win_command: C:\windows\system32\sysprep\sysprep.exe /oobe /generalize /quiet /shutdown
+      ignore_errors: yes
+
+- name: Capture template
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    timestamp: "{{ lookup('pipe', 'date +%s') }}"
+
+  tasks:
+    - name: Wait for VM to be powered off
+      wait_for:
+        port: 5986
+        delay: 20
+        state: stopped
+        host: "{{ azure_vm_ip }}"
+
+    - name: Capture image
+      azure_rm_image:
+        subscription_id: "{{ cloud_env[cloud].subscription_id }}"
+        resource_group: "{{ cloud_env[cloud].resource_group_name }}"
+        name: "{{ template + '-candidate-'+ timestamp }}"
+        client_id: "{{ cloud_env[cloud].client_id }}"
+        tenant: "{{ cloud_env[cloud].tenant_id }}"
+        secret: "{{ secrets[cloud].client_secret }}"
+        vm_name: "{{ base_templates[cloud_type][template].vm_name }}"
+        state: present
+      register: capture_info
+
+    - name: show capture info
+      debug:
+        var: capture_info
+
+

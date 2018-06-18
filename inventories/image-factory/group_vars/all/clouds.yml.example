@@ -1,0 +1,118 @@
+---
+cloud_env:
+  azure_demo:
+    description: "Azure demo with public IPs"
+    type: azure
+    client_id: 12345678-0123-4567-89ab-cdefdeadbeef
+    subscription_id: 12345678-0123-4567-89ab-cdefdeadbeef
+    tenant_id: 12345678-0123-4567-89ab-cdefdeadbeef
+    object_id: 12345678-0123-4567-89ab-cdefdeadbeef
+    public_ips: yes
+    location: westeurope
+    resource_group_name: imagecloud-factory
+    wsus:
+      wsus_client_enable: no
+      wsus_client_server: http://wsushost.local
+      wsus_client_detection_frequency: 1
+      wsus_client_reboot_warning_timeout: 15
+      wsus_client_reboot_launch_timeout: 5
+      wsus_client_schedule_install_day: Everyday
+      wsus_client_target_group: baseline
+
+  azure_private:
+    description: "Azure demo using Expressroute connected network"
+    type: azure
+    client_id: 12345678-0123-4567-89ab-cdefdeadbeef8
+    subscription_id: 12345678-0123-4567-89ab-cdefdeadbeef
+    tenant_id: 12345678-0123-4567-89ab-cdefdeadbeef
+    object_id: 12345678-0123-4567-89ab-cdefdeadbeef
+    public_ips: no
+    location: westeurope
+    resource_group_name: imagecloud-factory
+    vnet_name: imagecloud-factory-vnet
+    vnet_resourcegroup: imagecloud-factory-network
+    address_prefix: '10.1.0.0/20'
+    subnet_name: imagecloud-factory-priv-subnet
+    subnet_prefix: '10.1.1.0/24'
+    wsus:
+      wsus_client_enable: no
+      wsus_client_server: http://wsushost.local
+      wsus_client_detection_frequency: 1
+      wsus_client_reboot_warning_timeout: 15
+      wsus_client_reboot_launch_timeout: 5
+      wsus_client_schedule_install_day: Everyday
+      wsus_client_target_group: baseline
+
+  vmware_example:
+    type: vmware
+    description: "VMware Example"
+
+    packer_folder   : "Discovered virtual machine"
+    build_folder    : "packer-stager"
+    template_folder : "templates"
+
+    vcenter:
+      host           : vcenter-host.local
+      username       : imagebuilder@vsphere.local
+      validate_certs : no
+      datacenter     : Datacenter
+      dest_datacenter: Datacenter
+      dest_host      : "esxihost3.local"
+
+    buildhost:
+      builders        : [ "esx1","esx2" ]
+      esx1:
+        hostname      : "esxihost1.local"
+        username      : root
+        auth_method   : "password"
+        datastore     : "localdisk"
+        portgroup     : "Virtual Machine Network"
+        datacenter    : ha-datacenter
+        validate_certs: no
+      esx2:
+        hostname      : "esxihost2.local"
+        username      : root
+        auth_method   : "password"
+        datastore     : "localdisk"
+        portgroup     : "Virtual Machine Network"
+        datacenter    : ha-datacenter
+        validate_certs: no
+
+    wsus:
+      wsus_client_enable: no
+      wsus_client_server: http://wsushost.local
+      wsus_client_detection_frequency: 1
+      wsus_client_reboot_warning_timeout: 15
+      wsus_client_reboot_launch_timeout: 5
+      wsus_client_schedule_install_day: Everyday
+      wsus_client_target_group: baseline
+
+  aws_demo:
+    description: "AWS demo deployment"
+    type: aws_ec2
+    access_key: ABCDEFGHIJKLMNOPQRST
+    keypair: "image-factory-key"
+    sec_group: "image-factory-group"
+    region: "eu-central-1"
+    zone: "eu-central-1b"
+    launch_ids:
+      - "000000000000"
+    vpc_id: "vpc-00000000"
+    default_sec_rules:
+      -
+        proto: tcp
+        ports:
+          - 22
+          - 3389
+          - 5986
+        cidr_ip: "0.0.0.0/0"
+        cidr_ipv6: "::/0"
+        rule_desc: "OS Management"
+    wsus:
+      wsus_client_enable: no
+      wsus_client_server: http://wsushost.local
+      wsus_client_detection_frequency: 1
+      wsus_client_reboot_warning_timeout: 15
+      wsus_client_reboot_launch_timeout: 5
+      wsus_client_schedule_install_day: Everyday
+      wsus_client_target_group: baseline

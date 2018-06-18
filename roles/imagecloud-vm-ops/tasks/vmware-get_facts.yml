@@ -1,0 +1,13 @@
+---
+  - name: Get facts for VM
+    vmware_guest_facts_ex:
+      hostname: "{{ cloud_params.vcenter.host }}"
+      username: "{{ cloud_params.vcenter.username }}"
+      password: "{{ cloud_password }}"
+      validate_certs: "{{ cloud_params.vcenter.validate_certs }}"
+      datacenter: "{{ cloud_params.vcenter.datacenter }}"
+      folder: "/{{ cloud_params.vcenter.datacenter }}/vm/{{ source_folder }}"
+      name: "{{ source_vm }}"
+    register: _vm_facts
+    ignore_errors: true
+

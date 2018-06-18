@@ -1,0 +1,104 @@
+---
+  - name: Remove Default Web Site
+    win_iis_website:
+      name: "Default Web Site"
+      state: absent
+
+  - name: Remove Default Application Pool
+    win_iis_webapppool:
+      name: DefaultAppPool
+      state: absent
+
+  - name: Remove unwanted IIS modules
+    win_feature:
+      name: "{{ item }}"
+      state: absent
+    with_items:
+      - Web-Dir-Browsing
+      - Web-DAV-Publishing
+      - Web-CertProvider
+      - Web-Digest-Auth
+      - Web-Url-Auth
+      - Web-AppInit
+      - Web-ASP
+      - Web-WebSockets
+      - Web-Ftp-Server
+      - Web-Ftp-Service
+      - Web-Ftp-Ext
+      - Web-WHC
+      - Web-Mgmt-Compat
+      - Web-Metabase
+      - Web-Lgcy-Mgmt-Console
+      - Web-Lgcy-Scripting
+      - Web-WMI
+      - Web-Scripting-Tools
+      - Web-Mgmt-Service
+
+  - name: Stop IIS
+    win_service:
+      name: W3SVC
+      state: stopped
+
+  - name: Stop WAS
+    win_service:
+      name: WAS
+      state: stopped
+
+  - name: Create IIS root
+    win_file:
+      path: "{{ iis_root }}"
+      state: directory
+
+  - name: Check if C:\inetpub still exists
+    win_stat:
+      path: C:\inetpub
+    register: inetpub
+
+  - name: Copy Old IIS to new IIS
+    win_robocopy:
+      src: C:\inetpub
+      dest: "{{ iis_root }}"
+      flags: /e /copyall /v
+    when: inetpub.stat.exists
+
+  - name: Create IIS logdir
+    win_file:
+      path: "{{ iis_logdir }}"
+      state: directory
+
+  - name: Copy IIS configuration
+    win_copy:
+      src: files/applicationHost.config
+      dest: C:\Windows\System32\inetsrv\config\applicationHost.config
+      force: true
+
+  - name: Configure IIS root
+    win_regedit:
+      path: HKLM:\Software\Microsoft\inetstp
+      type: string
+      name: PathWWWRoot
+      data: E:\inetpub\wwwroot
+
+  - name: Configure WAS root
+    win_regedit:
+      path: HKLM:\System\CurrentControlSet\Services\WAS\Parameters
+      type: string
+      name: ConfigIsolationPath
+      data: E:\inetpub\temp\appPools
+
+  - name: Make sure C:\inetpub does not exist
+    win_file:
+      path: C:\inetpub
+      state: absent
+
+  - name: Restart WAS
+    win_service:
+      name: WAS
+      state: started
+
+  - name: Restart IIS
+    win_service:
+      name: W3SVC
+      state: started
+
+

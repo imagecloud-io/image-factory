@@ -1,0 +1,34 @@
+---
+repos:
+  - repo: local
+    hooks:
+      - id: ansible-lint
+        name: ansible-lint
+        entry: >
+          ansible-lint -r ~/.ansible/quality/ansible-lint/ -R
+          --nocolor -p -x ANSIBLE0002
+        language: system
+        exclude: ^(.*)\.vault\.yml$
+        types: [file, yaml]
+  - repo: local
+    hooks:
+      - id: yamllint
+        name: yamllint
+        entry: yamllint
+        language: system
+        types: [file, yaml]
+  - repo: local
+    hooks:
+      - id: todo.md.sh
+        name: Generate TODO.md
+        description: This hook will autogenerate a TODO.md
+        entry: scripts/todo.md.sh -e TODO.md -l
+        language: system
+        types: [file, non-executable, text]
+  - repo: local
+    hooks:
+      - id: check-ansible-vault.sh
+        name: Verify if all `ansible-vault` files are encrypted
+        entry: scripts/check-ansible-vault.sh
+        language: system
+        types: [file, non-executable, text]

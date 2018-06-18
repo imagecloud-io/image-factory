@@ -1,0 +1,6 @@
+---
+# handlers file for imagecloud-setup-webserver
+- name: Reload httpd
+  service:
+    name: httpd
+    state: reloaded

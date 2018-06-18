@@ -1,0 +1,4 @@
+---
+  - name: Don't do anything
+    wait_for:
+      timeout: 1

@@ -1,0 +1,44 @@
+---
+  - name: Create Azure VM from Image
+    azure_rm_deployment:
+      state: present
+      deployment_name: "{{ template_params.vm_name }}-ImageTest"
+      location: "{{ cloud_params.location }}"
+      resource_group_name: "{{ cloud_params.resource_group_name }}"
+      client_id: "{{ cloud_params.client_id }}"
+      secret: "{{ cloud_password }}"
+      subscription_id: "{{ cloud_params.subscription_id }}"
+      tenant: "{{ cloud_params.tenant_id }}"
+      template: "{{ lookup('template', base_dir + '/include/azure/imagecloud-azure-{{ os_type }}-image.j2.json') }}"
+      wait_for_deployment_completion: yes
+      parameters:
+        adminUsername:
+          value: "{{ template_params.admin_user }}"
+        adminPassword:
+          value: "{{ template_params.admin_password }}"
+        adminPublicKey:
+          value: "{{ template_params.ssh_key }}"
+        imageName:
+          value: "{{ source_vm }}"
+        vmName:
+          value: "{{ destination_vm }}"
+        ComputerName:
+          value: "{{ destination_vm[0:14] }}"
+        nicName:
+          value: "{{ template_params.vm_name }}-nic"
+        virtualNetworkName:
+          value: "{{ cloud_params.vnet_name }}"
+        vnetResourceGroup:
+          value: "{{ cloud_params.vnet_resourcegroup }}"
+        vmResourceGroup:
+          value: "{{ cloud_params.resource_group_name }}"
+        addressPrefix:
+          value: "{{ cloud_params.address_prefix }}"
+        subnetName:
+          value: "{{ cloud_params.subnet_name }}"
+        subnetPrefix:
+          value: "{{ cloud_params.subnet_prefix }}"
+        vmSize:
+          value: "{{ template_params.vm_size }}"
+        storageAccountType:
+          value: "{{ template_params.storage_type }}"

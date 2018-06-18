@@ -1,0 +1,69 @@
+{
+    "builders": [
+        {
+            "type": "vmware-iso",
+            "version": "11",
+            "remote_type": "esx5",
+            "remote_host": "{{ buildhost_facts.hostname }}",
+            "remote_username": "{{ buildhost_facts.username }}",
+            "remote_password": "{{ secrets.esxi.password }}",
+            "remote_datastore": "{{ buildhost_facts.datastore }}",
+            "skip_compaction": "true",
+            "disk_type_id": "thin",
+            "disk_size": "{{ base_templates[cloud_type][template].os_disk_mb }}",
+            "disk_additional_size": [ "{{ base_templates[cloud_type][template].data_disk_mb }}" ],
+            "guest_os_type": "{{ base_templates[cloud_type][template].guest_os }}",
+            "vm_name": "{{ base_templates[cloud_type][template].vm_name }}",
+            "output_directory": "{{ base_templates[cloud_type][template].vm_name }}",
+            "iso_checksum": "{{ base_templates[cloud_type][template].iso_checksum }}",
+            "iso_checksum_type": "{{ base_templates[cloud_type][template].iso_checksum_type }}",
+            "iso_url": "{{ base_templates[cloud_type][template].iso }}",
+            "headless": "true",
+            "boot_wait": "2m",
+            "communicator": "winrm",
+            "winrm_username": "{{ base_templates[cloud_type][template].admin_user }}",
+            "winrm_password": "{{ secrets.template.password }}",
+            "winrm_port": "5986",
+            "winrm_use_ssl": "true",
+            "winrm_insecure": "true",
+            "winrm_timeout": "8h",
+            "shutdown_command": "shutdown /s /t 10 /f /d p:4:1 /c \"Packer Shutdown\"",
+            "vnc_port_min": 5950,
+            "vnc_port_max": 5980,
+            "vnc_disable_password": "true",
+            "keep_registered": "true",
+            "floppy_files": [
+                "{{ tmpdir }}/autounattend.xml",
+                "{{ base_dir + '/include/packer/scripts/windows/enable-winrm.ps1' }}"
+            ],
+            "vmx_data": {
+                "RemoteDisplay.vnc.enabled": "false",
+                "RemoteDisplay.vnc.port": "5900",
+                "memsize": "{{ base_templates[cloud_type][template].mem_size }}",
+                "numvcpus": "2",
+                "ethernet0.present": "TRUE",
+                "ethernet0.startConnected": "TRUE",
+                "ethernet0.networkName": "{{ buildhost_facts.portgroup }}",
+                "ethernet0.addressType": "generated",
+                "ethernet0.wakeOnPcktRcv": "FALSE",
+                "ethernet0.virtualDev": "e1000",
+                "vcpu.hotadd": "TRUE",
+                "mem.hotadd": "TRUE",
+                "cpuid.coresPerSocket": "1",
+                "keyboard.typematicMinDelay": "2000000",
+                "ide1:0.present": "Do not disable, packer uses this to boot from cdrom",
+                "ide1:0.present": "TRUE",
+                "scsi0.virtualDev": "lsisas1068",
+                "scsi1.virtualDev": "pvscsi",
+                "scsi1.present": "TRUE"
+            },
+            "vmx_data_post": {
+                "ide1:0.startConnected": "FALSE",
+                "ide1:0.devicetype": "atapi-cdrom",
+                "ide1:0.filename": "CD-ROM 1",
+                "ide1:0.clientDevice": "TRUE"
+
+            }
+        }
+    ]
+}

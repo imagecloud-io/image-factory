@@ -1,0 +1,2 @@
+[hosts]
+localhost ansible_connection=local ansible_winrm_server_cert_validation=ignore

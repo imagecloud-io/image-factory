@@ -1,0 +1,148 @@
+---
+- name: Deploy templates on Azure for testing
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    template_types: [ "basic" ]
+    os_type: "{{ base_templates[cloud_type][template].guest_os }}"
+    template_candidate: "candidate"
+
+  pre_tasks:
+
+    - name: Set base variables
+      set_fact:
+        base_dir: "{{ lookup('pipe', 'git rev-parse --show-toplevel') }}"
+        cloud_type: "{{ cloud_env[cloud].type }}"
+
+    - name: Get list of Azure Images
+      azure_rm_image_facts:
+        client_id: "{{ cloud_env[cloud].client_id }}"
+        secret: "{{ secrets[cloud].client_secret }}"
+        subscription_id: "{{ cloud_env[cloud].subscription_id }}"
+        tenant: "{{ cloud_env[cloud].tenant_id }}"
+      register: _az_list
+
+    - name: Set list of Images
+      set_fact:
+        az_list: "{{ _az_list.ansible_facts.azure_images }}"
+
+    - name: Build template list
+      set_fact:
+        template_list: "{{ template_list | default([]) + [ item ]  }}"
+      when: item is search(template + '-' + template_candidate + '-')
+      with_items:
+        - "{{ az_list }}"
+
+    - name: Find newest template by epoch time stamp
+      set_fact:
+        newest_template: "{{ (template_list|default([])|sort)[-1] }}"
+      when: template_list|default([])
+
+    - name: Fail when no templates have been found
+      fail:
+        msg: There are no matching templates. We should not have come this far.
+      when: template_list is not defined
+
+  roles:
+    - role: imagecloud-vm-ops
+      cloud_params: "{{ cloud_env[cloud] }}"
+      cloud_password: "{{ secrets[cloud].client_secret }}"
+      template_params: "{{ base_templates[cloud_type][template] }}"
+      source_vm: "{{ newest_template.basic }}"
+      destination_vm: "{{ 'test-' + newest_template.basic }}"
+      action: deploy
+
+  post_tasks:
+
+    - name: Get Network interface facts
+      azure_rm_networkinterface_facts:
+        resource_group: "{{ cloud_env[cloud].resource_group_name }}"
+        client_id: "{{ cloud_env[cloud].client_id }}"
+        secret: "{{ secrets[cloud].client_secret }}"
+        subscription_id: "{{ cloud_env[cloud].subscription_id }}"
+        tenant: "{{ cloud_env[cloud].tenant_id }}"
+        name: "{{ base_templates[cloud_type][template].vm_name }}-nic"
+      register: _nic_facts
+
+    - name: Set private IP address
+      set_fact:
+        azure_vm_ip: "{{ _nic_facts.ansible_facts.azure_networkinterfaces[0].properties.ipConfigurations[0].properties.privateIPAddress }}"
+
+    - name: Add Windows VM to inventory
+      add_host:
+        name: "{{ 'test-' + newest_template.basic }}"
+        ansible_host: "{{ azure_vm_ip }}"
+        ansible_user: "{{ base_templates[cloud_env[cloud].type][ template ].admin_user }}"
+        ansible_password: "{{ secrets.template.password }}"
+        ansible_port: 5986
+        ansible_connection: winrm
+        ansible_winrm_server_cert_validation: ignore
+        ansible_winrm_operation_timeout_sec: 120
+        ansible_winrm_read_timeout_sec: 150
+        groups: vm_stager
+      no_log: true
+      when: base_templates[cloud_env[cloud].type][template].guest_os is match("windows*")
+
+    - name: Add Linux VM to inventory
+      add_host:
+        name: "{{ 'test-' + newest_template.basic }}"
+        ansible_host: "{{ azure_vm_ip }}"
+        ansible_user: "{{ base_templates[cloud_env[cloud].type][ template ].admin_user }}"
+        ansible_ssh_private_key_file: "{{ base_dir }}/.secrets/factory"
+        ansible_become: yes
+        groups: vm_stager
+      no_log: true
+      when: not base_templates[cloud_env[cloud].type][ template ].guest_os is match("windows*")
+
+- name: Test VM against security baseline
+  hosts: vm_stager
+  gather_facts: true
+
+  roles:
+    - role: imagecloud-sec-baseline
+      admin_user: "{{ base_templates.azure[ template ].admin_user }}"
+      admin_password: "{{ base_templates.azure[ template ].admin_password }}"
+      admin_key: "{{ base_dir }}/.secrets/factory"
+      register: baseline_failed
+
+  post_tasks:
+    - name: Make sure baseline result is not forgotten
+      set_fact:
+        baseline_compliant: "{{ not baseline_failed }}"
+      delegate_to: localhost
+      delegate_facts: yes
+
+- name: Remove Test VM
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Remove the VM
+      azure_rm_virtualmachine:
+        resource_group: "{{ cloud_env[cloud].resource_group_name }}"
+        name: "{{ 'test-' + newest_template.basic }}"
+        state: absent
+        remove_on_absent: all
+        client_id: "{{ cloud_env[cloud].client_id }}"
+        secret: "{{ secrets[cloud].client_secret }}"
+        subscription_id: "{{ cloud_env[cloud].subscription_id }}"
+        tenant: "{{ cloud_env[cloud].tenant_id }}"
+
+    - name: Give final message
+      fail:
+        msg: Template does not comply with hardening requirements. It has been deleted.
+      when: not baseline_compliant
+
+    - name: Give final message
+      debug:
+        msg: Template complies with hardening requirements.
+      when: baseline_compliant
+
+    - name: Delete Image
+      azure_rm_image:
+        resource_group_name: "{{ cloud_env[cloud].resource_group_name }}"
+        name: "{{ newest_template.basic }}"
+        state: absent

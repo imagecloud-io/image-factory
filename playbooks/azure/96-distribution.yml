@@ -1,0 +1,36 @@
+---
+- name: Create new image, test was OK
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    base_dir: "{{ lookup('pipe', 'git rev-parse --show-toplevel') }}"
+    last_commit: "{{ lookup('pipe', 'git log -n 1') }}"
+    timestamp: "{{ lookup('pipe', 'date +%s') }}"
+
+  tasks:
+    - name: Wait for VM to be powered off
+      wait_for:
+        port: 5986
+        delay: 20
+        state: stopped
+        host: "{{ azure_vm_ip }}"
+
+    - name: Capture image
+      azure_rm_image:
+        subscription_id: "{{ cloud_env[cloud].subscription_id }}"
+        resource_group: "{{ cloud_env[cloud].resource_group_name }}"
+        name: "{{ template + '-candidate-'+ timestamp }}"
+        client_id: "{{ cloud_env[cloud].client_id }}"
+        tenant: "{{ cloud_env[cloud].tenant_id }}"
+        secret: "{{ secrets[cloud].client_secret }}"
+        vm_name: "{{ base_templates[cloud_type][template].vm_name }}"
+        state: present
+      register: capture_info
+
+    - name: show capture info
+      debug:
+        var: capture_info
+
+

@@ -1,0 +1,19 @@
+---
+- name: Install VM agent on Windows VM
+  hosts: vm_stager_windows
+  gather_facts: false
+
+  tasks:
+    - name: We don't need to do anything
+      debug:
+        msg: Skipping...
+
+
+- name: Install VM agent on Linux VM
+  hosts: vm_stager_windows
+  gather_facts: false
+
+  tasks:
+    - name: We don't need to do anything
+      debug:
+        msg: Skipping...

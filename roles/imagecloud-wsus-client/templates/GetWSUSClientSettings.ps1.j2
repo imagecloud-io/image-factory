@@ -1,0 +1,2 @@
+Import-Module {{ tmp_dir }}\Get-ClientWSUSSetting.ps1 -Force
+Get-ClientWSUSSetting | Select {{ wsus_client_settings|default([])|join(',') }} | ConvertTo-Json -Compress

@@ -1,0 +1,13 @@
+---
+- name: Shut down Windows VM
+  hosts: vm_stager_windows:vm_stager_linux
+  gather_facts: true
+
+  tasks:
+    - name: Issue shutdown command
+      win_command: shutdown /s /t 1 /f /d p:4:1 /c Done
+      when: ansible_os_family == "Windows"
+
+    - name: Issue shutdown command
+      command: /usr/sbin/shutdown -h +1
+      when: ansible_os_family in [ "RedHat", "Debian" ]

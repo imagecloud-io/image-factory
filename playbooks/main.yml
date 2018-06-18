@@ -1,0 +1,47 @@
+---
+# TODO: refactor: replace 'with_<lookup>:' constructs with 'loop:' constructs
+
+  - name: Create the desired template
+    hosts: all
+    connection: local
+    gather_facts: false
+
+    tasks:
+      - name: Set useful facts
+        set_fact:
+          base_dir: "{{ lookup('pipe', 'git rev-parse --show-toplevel') }}"
+          last_commit: "{{ lookup('pipe', 'git log -n 1') }}"
+          timestamp: "{{ lookup('pipe', 'date +%s') }}"
+
+      - name: Check required parameters
+        assert:
+          that:
+            - template is defined
+            - cloud is defined
+            - cloud_type is defined
+
+      - name: Check cloud type
+        assert:
+          that: 'cloud_type == cloud_env[cloud].type'
+          msg: "The cloud type specified doesn't match the cloud type of the selected cloud. Due to a limitation in Ansible, it's currently not possible to set it through variable assignments in the playbook. "
+
+
+
+  - import_playbook: "{{ cloud_type }}/01-create.yml"
+
+  - import_playbook: "common/03-update.yml"
+
+  - import_playbook: "{{ cloud_type }}/04-vm_agent.yml"
+
+  - import_playbook: "common/05-basic.yml"
+
+  - import_playbook: "custom/10-custom-tasks.yml"
+
+  - import_playbook: "{{ cloud_type }}/90-imaging.yml"
+
+  - import_playbook: "{{ cloud_type }}/93-template-test.yml"
+
+  - import_playbook: "{{ cloud_type }}/96-distribution.yml"
+
+  - import_playbook: "{{ cloud_type }}/99-cleanup.yml"
+

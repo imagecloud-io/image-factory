@@ -1,0 +1,143 @@
+---
+# A list of templates for platforms
+
+base_templates:
+  vmware:
+    windows2012r2:
+      description: "Windows 2012R2"
+      iso: /opt/iso/SW_DVD9_Windows_Svr_Std_and_DataCtr_2012_R2_64Bit_English_-4_MLF_X19-82891.ISO
+      iso_checksum: 9a00defab26a046045d939086df78460
+      iso_checksum_type: md5
+      answer_file: autounattend.xml
+      answer_template: windows2012r2/autounattend.j2.xml
+      guest_os: windows8srv-64
+      os_disk_mb: 40960
+      data_disk_mb: 10240
+      mem_size: 8192
+      packer_template: vmware-windows2012r2.j2.json
+      vm_name: w2012r2
+      admin_user: Administrator
+    windows2016:
+      description: "Windows 2016"
+      iso: /opt/iso/SW_DVD9_Win_Svr_STD_Core_and_DataCtr_Core_2016_64Bit_English_-3_MLF_X21-30350.ISO
+      iso_checksum: eeb465c08cf7243dbaaa3be98f5f9e40
+      iso_checksum_type: md5
+      answer_file: autounattend.xml
+      answer_template: windows2016/autounattend.j2.xml
+      guest_os: windows9srv-64
+      os_disk_mb: 40960
+      data_disk_mb: 10240
+      mem_size: 12288
+      packer_template: vmware-windows2016.j2.json
+      vm_name: w2016
+      admin_user: Administrator
+    centos7:
+      description: "CentOS 7"
+      iso: /opt/iso/CentOS-7-x86_64-Minimal-1708.iso
+      iso_checksum: 5848f2fd31c7acf3811ad88eaca6f4aa
+      iso_checksum_type: md5
+      answer_template: centos7/ks.j2.cfg
+      answer_file: ks.cfg
+      boot_options: ""
+      guest_os: centos-64
+      os_disk_mb: 40960
+      data_disk_mb: 10240
+      system_vg: sysvg
+      data_vg: datavg
+      data_lvol: opt
+      data_mount: /opt
+      mem_size: 8192
+      packer_template: vmware-centos7.j2.json
+      vm_name: centos7
+      admin_user: imagecloud
+      admin_key: ~/.ssh/ansible
+  azure:
+    windows2012r2:
+      description: "Windows 2012R2"
+      capture_container_name: packertemplates
+      capture_name_prefix: factory
+      os_type: Windows
+      guest_os: windows
+      image_offer: WindowsServer
+      image_sku: 2012-R2-Datacenter
+      image_publisher: MicrosoftWindowsServer
+      vm_size: Standard_DS2_v2
+      storage_type: Standard_LRS
+      data_disk_gb: 10
+      data_disk_cache: ReadWrite
+      vm_name: w2012r2
+      admin_user: ansible
+    windows2016:
+      description: "Windows 2016"
+      capture_container_name: packertemplates
+      capture_name_prefix: factory
+      os_type: Windows
+      guest_os: windows
+      image_offer: WindowsServer
+      image_sku: 2016-Datacenter
+      image_publisher: MicrosoftWindowsServer
+      storage_type: Standard_LRS
+      vm_size: Standard_DS2_v2
+      data_disk_gb: 10
+      data_disk_cache: ReadWrite
+      vm_name: w2016
+      admin_user: ansible
+    centos7:
+      description: "CentOS 7"
+      capture_container_name: packertemplates
+      capture_name_prefix: factory
+      os_type: Linux
+      guest_os: linux
+      image_offer: CentOS-LVM
+      image_sku: 7-LVM
+      image_publisher: OpenLogic
+      vm_size: Standard_DS2_v2
+      storage_type: Standard_LRS
+      data_disk_gb: 10
+      data_disk_cache: ReadWrite
+      data_vg: datavg
+      data_lvol: opt
+      data_mount: /opt
+      vm_name: centos7
+      admin_user: ansible
+      admin_key: ~/.ssh/ansible
+      answer_file: ks.cfg
+      answer_template: centos7/ks.j2.xml
+  aws_ec2:
+    redhat7:
+      description: "RedHat 7"
+      instance_type: "t2.micro"
+      base_ami:
+        name: "RHEL-7.*_HVM_GA-*x86_64-*-Hourly2-GP2"
+        owner: "309956199498"
+      guest_os: "linux"
+      vm_name: "redhat7"
+      admin_user: "ec2-user"
+      user_data: "include/aws_ec2/redhat7.j2"
+      baseline_accept:
+        - "os-08"
+        - "package-08"
+      encrypt: yes
+      kms_key: "12345678-0123-4567-89ab-cdefdeadbeef"
+      ena_enabled: yes
+    amazon:
+      description: "Amazon Linux 2018.03 HVM"
+      instance_type: "t2.micro"
+      base_ami:
+        name: "amzn-ami-hvm*x86_64-gp2"
+        owner: "amazon"
+      guest_os: "linux"
+      vm_name: "amazon"
+      admin_user: "ec2-user"
+      user_data: "include/aws_ec2/amazon.j2"
+    windows2016:
+      description: "Windows 2016 Datacenter"
+      instance_type: "t2.micro"
+      base_ami:
+        name: "Windows_Server-2016-English-Full-Base*"
+        owner: "amazon"
+      guest_os: "windows"
+      vm_name: "win2016"
+      admin_user: "Administrator"
+      user_data: "include/aws_ec2/windows2016.j2"
+

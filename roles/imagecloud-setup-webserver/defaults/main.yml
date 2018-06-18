@@ -1,0 +1,11 @@
+---
+# defaults file for imagecloud-setup-webserver
+
+iis_components: Web-Server,Web-Common-Http
+
+httpd_components:
+  - httpd
+  - mod_ssl
+  - mod_ruid2
+
+required_variables: []

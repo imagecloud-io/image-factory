@@ -1,0 +1,7 @@
+---
+  - name: Install and configure an IIS server
+    win_feature:
+      name: "{{ iis_components }}"
+      include_management_tools: true
+      state: present
+

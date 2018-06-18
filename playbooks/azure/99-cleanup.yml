@@ -1,0 +1,16 @@
+---
+- name: Cleanup stuff
+  hosts: localhost
+  gather_facts: true
+
+  tasks:
+    - name: Remove the VM
+      azure_rm_virtualmachine:
+        resource_group: "{{ cloud_env[cloud].resource_group_name }}"
+        name: "{{ base_templates[cloud_type][template].vm_name }}"
+        state: absent
+        remove_on_absent: all
+        client_id: "{{ cloud_env[cloud].client_id }}"
+        secret: "{{ secrets[cloud].client_secret }}"
+        subscription_id: "{{ cloud_env[cloud].subscription_id }}"
+        tenant: "{{ cloud_env[cloud].tenant_id }}"

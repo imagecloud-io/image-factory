@@ -1,0 +1,92 @@
+---
+- name: Add blank disks if wanted\
+  block:
+
+  - name: Get a raw list of partitions
+    find:
+      paths: /dev
+      file_type: any
+      patterns: '^[sd|xvd](.*)([0-9]+)$'
+      use_regex: yes
+    register: _partitions
+
+  - name: Create a list of partition names
+    set_fact:
+      scsi_partitions: "{{ scsi_partitions|default([]) + [ item.path ]}}"
+    with_items: "{{ _partitions.files }}"
+
+  - name: Get a raw list of scsi disks
+    find:
+      paths: /dev
+      file_type: any
+      patterns: '^[sd|xvd]([a-z]+)$'
+      use_regex: yes
+    register: _drives
+
+  - name: Create a list of scsi disk devices
+    set_fact:
+      scsi_drives: "{{ scsi_drives|default([]) + [ item.path ]}}"
+    with_items: "{{ _drives.files }}"
+
+  - name: Create a list of scsi disk devices without partitions
+    set_fact:
+      no_parts: "{{ no_parts|default(scsi_drives)|difference([ item[:-1] ]) }}"
+    with_items: "{{ scsi_partitions }}"
+
+
+  - name: Create a raw list of already configured LVM physical volumes
+    shell: "pvdisplay -s | sed -e 's/  Device \"//' | sed -e 's/\".*$//'"
+    register: _pvdisplay
+
+  - name: Create list of blank disks (no partitions, not part of LVM)
+    set_fact:
+      blank_disks: "{{ blank_disks|default(no_parts)|difference([ item ]) }}"
+    with_items: "{{ _pvdisplay.stdout_lines }}"
+
+  - name: Add blank disks to LVM VG using lvg
+    lvg:
+      pvs: "{{ blank_disks }}"
+      vg: "{{ vg }}"
+      state: present
+    when: blank_disks
+
+  - name: Create logical volume for application data storage
+    lvol:
+      lv: "{{ lvol }}"
+      vg: "{{ vg }}"
+      size: "100%FREE"
+      active: yes
+      state: present
+
+  - name: Format application data volume
+    filesystem:
+      dev: "{{ '/dev/' + vg + '/' + lvol }}"
+      fstype: xfs
+
+  - name: Make sure mount point exists
+    file:
+      state: directory
+      path: "{{ mount }}"
+
+  - name: Create application data volume mount in fstab
+    mount:
+      path: "{{ mount }}"
+      fstype: xfs
+      src: "{{ '/dev/' + vg + '/' + lvol }}"
+      state: present
+
+  - name: Mount application data volume mount
+    mount:
+      path: "{{ mount }}"
+      fstype: xfs
+      src: "{{ '/dev/' + vg + '/' + lvol }}"
+      state: mounted
+  when: add_disks is defined
+
+- name: Install missing packages
+  yum:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - rng-tools
+    - nmap-ncat

@@ -1,0 +1,60 @@
+---
+  #
+  # Update (or disable) WSUS settings based on occurence and value
+  #
+  # Note: not applying yet ... only making sure were using the correct settings.
+  #
+
+  - name: Init raw args variable
+    set_fact:
+      wsus_set_client_args_raw: []
+
+  - name: Set target group if specified
+    set_fact:
+      wsus_set_client_args_raw: "{{ wsus_set_client_args_raw}} + [ '-TargetGroup {{ wsus_client_target_group }}' ]"
+    when: wsus_client_target_group|default('NA') != 'NA'
+
+  - name: Disable target group if not specified
+    set_fact:
+      wsus_set_client_args_raw: "{{ wsus_set_client_args_raw }} + [ '-DisableTargetGroup' ]"
+    when: wsus_client_target_group|default('NA') == 'NA'
+
+  - name: Set detection frequency if specified
+    set_fact:
+      wsus_set_client_args_raw: "{{ wsus_set_client_args_raw }} + [ '-DetectionFrequency {{ wsus_client_detection_frequency|int }}' ]"
+    when: wsus_client_detection_frequency|default(-1)|int > -1
+
+  - name: Disable detection frequency if not specified
+    set_fact:
+      wsus_set_client_args_raw: "{{ wsus_set_client_args_raw }} + [ '-DisableDetectionFrequency' ]"
+    when: wsus_client_detection_frequency|default(-1)|int == -1
+
+  - name: Set reboot timeout if specified
+    set_fact:
+      wsus_set_client_args_raw: "{{ wsus_set_client_args_raw }} + [ '-RebootLaunchTimeout {{ wsus_client_reboot_launch_timeout }}' ]"
+    when: wsus_client_reboot_launch_timeout|default(-1)|int > -1
+
+  - name: Disable reboot timeout if not specified
+    set_fact:
+      wsus_set_client_args_raw: "{{ wsus_set_client_args_raw }} + [ '-DisableRebootLaunchTimeout' ]"
+    when: wsus_client_reboot_launch_timeout|default(-1)|int == -1
+
+  - name: Set reboot warning timeout if specified
+    set_fact:
+      wsus_set_client_args_raw: "{{ wsus_set_client_args_raw }} + [ '-RebootWarningTimeout {{ wsus_client_reboot_warning_timeout }}' ]"
+    when: wsus_client_reboot_warning_timeout|default(-1)|int > -1
+
+  - name: Disable reboot warning timeout if not specified
+    set_fact:
+      wsus_set_client_args_raw: "{{ wsus_set_client_args_raw }} + [ '-DisableRebootWarningTimeout' ]"
+    when: wsus_client_reboot_warning_timeout|default(-1)|int == -1
+
+  - name: Set reschedule wait time if specified
+    set_fact:
+      wsus_set_client_args_raw: "{{ wsus_set_client_args_raw }} + [ '-RescheduleWaitTime {{ wsus_client_reschedule_waittime }}' ]"
+    when: wsus_client_reschedule_waittime|default(-1)|int > -1
+
+  - name: Disable reschedule wait time if not specified
+    set_fact:
+      wsus_set_client_args_raw: "{{ wsus_set_client_args_raw }} + [ '-DisableRescheduleWaitTime' ]"
+    when: wsus_client_reschedule_waittime|default(-1)|int == -1
