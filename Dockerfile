@@ -1,4 +1,4 @@
-FROM imagecloudio/plant:2018.06.00
+FROM imagecloudio/plant:2018.06.19
 
 LABEL Description="This image is used to build the image factory with code"
 
