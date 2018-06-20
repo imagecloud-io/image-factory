@@ -70,8 +70,12 @@ failure in the previous steps, we need to remove the VM as well. This step takes
 
 ## Known issues
 
-The Windows AWS regularly show WinRM failures. Sometimes it's just the time in the Windows machine
-that's a few minutes ahead, sometimes the password doesn't 
+* The Windows VMs in AWS regularly show WinRM failures. According to 
+[this issue on GitHub](https://github.com/ansible/ansible/issues/23320) the Ansible developers are
+aware of it. We did discover that really strong passwords don't always work because they might
+contain characters that should be escaped in one shell but aren't recognized as such in the other. 
+Another approach that seems to work is to sync the time right after deployment before doing anything 
+with WinRM.
 
 ## Important files
 
@@ -91,6 +95,7 @@ All dotfiles like .editorconfig, .gitignore and so on can be modified to your ow
 `.pre-commit-config` contains a sample configuration that makes sure the Ansible YAML files are linted, 
 a TODO.md file is generated and that Ansible vault files are encrypted. It uses two scripts in the 
 scripts folder, and you need to have ansible-lint and pre-commit installed.
+
 
 ## License
 

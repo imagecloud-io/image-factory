@@ -17,6 +17,8 @@ base_templates:
       packer_template: vmware-windows2012r2.j2.json
       vm_name: w2012r2
       admin_user: Administrator
+      baseline_accept:
+        - "cis-network-access-2.2.2"
     windows2016:
       description: "Windows 2016"
       iso: /opt/iso/SW_DVD9_Win_Svr_STD_Core_and_DataCtr_Core_2016_64Bit_English_-3_MLF_X21-30350.ISO
@@ -31,6 +33,8 @@ base_templates:
       packer_template: vmware-windows2016.j2.json
       vm_name: w2016
       admin_user: Administrator
+      baseline_accept:
+        - "cis-network-access-2.2.2"
     centos7:
       description: "CentOS 7"
       iso: /opt/iso/CentOS-7-x86_64-Minimal-1708.iso
@@ -51,6 +55,9 @@ base_templates:
       vm_name: centos7
       admin_user: imagecloud
       admin_key: ~/.ssh/ansible
+      baseline_accept:
+        - "os-08"
+        - "package-08"
   azure:
     windows2012r2:
       description: "Windows 2012R2"
@@ -67,6 +74,8 @@ base_templates:
       data_disk_cache: ReadWrite
       vm_name: w2012r2
       admin_user: ansible
+      baseline_accept:
+        - "cis-network-access-2.2.2"
     windows2016:
       description: "Windows 2016"
       capture_container_name: packertemplates
@@ -82,6 +91,8 @@ base_templates:
       data_disk_cache: ReadWrite
       vm_name: w2016
       admin_user: ansible
+      baseline_accept:
+        - "cis-network-access-2.2.2"
     centos7:
       description: "CentOS 7"
       capture_container_name: packertemplates
@@ -103,6 +114,9 @@ base_templates:
       admin_key: ~/.ssh/ansible
       answer_file: ks.cfg
       answer_template: centos7/ks.j2.xml
+      baseline_accept:
+        - "os-08"
+        - "package-08"
   aws_ec2:
     redhat7:
       description: "RedHat 7"
@@ -130,9 +144,13 @@ base_templates:
       vm_name: "amazon"
       admin_user: "ec2-user"
       user_data: "include/aws_ec2/amazon.j2"
+      baseline_accept:
+        - "os-08"
+        - "package-08"
+      encrypt: yes
     windows2016:
       description: "Windows 2016 Datacenter"
-      instance_type: "t2.micro"
+      instance_type: "t2.large"
       base_ami:
         name: "Windows_Server-2016-English-Full-Base*"
         owner: "amazon"
@@ -140,4 +158,7 @@ base_templates:
       vm_name: "win2016"
       admin_user: "Administrator"
       user_data: "include/aws_ec2/windows2016.j2"
+      baseline_accept:
+        - "cis-network-access-2.2.2"
+      encrypt: no
 
