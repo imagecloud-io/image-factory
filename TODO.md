@@ -1,12 +1,48 @@
 ## TODO
-> This document contains our current Technical Debt (generated: 15-06-2018 12:09)
+> This document contains our current Technical Debt (generated: 21-06-2018 11:59)
+
+### ``include/README.md``
+(line 1) : add proper documentation
+
+
+### ``inventories/image-factory/group_vars/all/README.md``
+(line 1) : add proper documentation
+
+
+### ``playbooks/README.md``
+(line 1) : add proper documentation
+
 
 ### ``playbooks/aws_ec2/01-create.yml``
 (line 29) : find out why ec2_win_password isn't working
 
 
+### ``playbooks/aws_ec2/README.md``
+(line 1) : add proper documentation
+
+
+### ``playbooks/azure/README.md``
+(line 1) : add proper documentation
+
+
+### ``playbooks/common/README.md``
+(line 1) : add proper documentation
+
+
+### ``playbooks/custom/README.md``
+(line 1) : add proper documentation
+
+
 ### ``playbooks/main.yml``
 (line 2) : refactor: replace 'with_<lookup>:' constructs with 'loop:' constructs
+
+
+### ``playbooks/vmware/README.md``
+(line 1) : add proper documentation
+
+
+### ``roles/README.md``
+(line 1) : add proper documentation
 
 
 ### ``roles/imagecloud-libraries/defaults/main.yml``
