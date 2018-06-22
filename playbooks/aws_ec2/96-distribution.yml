@@ -31,17 +31,3 @@
         region: "{{ cloud_env[cloud].region }}"
         delete_snapshot: yes
         state: absent
-
-#    - name: Capture final AMI
-#      ec2_ami:
-#        aws_access_key: "{{ cloud_env[cloud].access_key | default(omit) }}"
-#        aws_secret_key: "{{ secrets[cloud].secret_access_key | default(omit) }}"
-#        description: "{{ last_commit }}"
-#        instance_id: "{{ ec2_instance.instances[0].instance_id }}"
-#        region: "{{ cloud_env[cloud].region }}"
-#        name: "{{ template + '-CIStested-' + timestamp }}"
-#        wait: true
-#        state: present
-#        launch_permissions:
-#          user_ids: "{{ cloud_env[cloud].launch_ids }}"
-#      register: ami_info
