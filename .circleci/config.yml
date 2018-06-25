@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: imagecloudio/plant:2018.06.00
+      - image: imagecloudio/plant:2018.06.22
     steps:
       - checkout
       - run:
