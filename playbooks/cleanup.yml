@@ -14,25 +14,6 @@
             - cloud is defined
             - cloud_type is defined
 
-#      - name: Read all variables
-#        block:
-#          - name: Get stats on all variable files
-#            stat:
-#              path: "{{item}}"
-#            with_fileglob:
-#              - "{{ base_dir }}/vars/factory/secrets.vault"
-#              - "{{ base_dir }}/vars/factory/common.yml"
-#              - "{{ base_dir }}/vars/factory/templates.yml"
-#              - "{{ base_dir }}/vars/factory/{{ cloud }}/secrets.vault"
-#              - "{{ base_dir }}/vars/factory/{{ cloud }}/default.yml"
-#            register: _variables_stat
-#
-#          - name: Include all variable files (only when found)
-#            include_vars : "{{item.stat.path}}"
-#            when         : item.stat.exists
-#            with_items   : "{{_variables_stat.results}}"
-#            no_log       : true
-
       - name: Check cloud type
         assert:
           that: 'cloud_type == cloud_env[cloud].type'
