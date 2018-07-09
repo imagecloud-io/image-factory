@@ -1,8 +1,10 @@
 ## TODO
-> This document contains our current Technical Debt (generated: 09-07-2018 09:33)
+> This document contains our current Technical Debt (generated: 09-07-2018 09:37)
 
 ### ``include/README.md``
 (line 1) : add proper documentation
+
+(line 3) : find a way to split user config and our config
 
 
 ### ``inventories/image-factory/group_vars/all/README.md``
