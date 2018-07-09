@@ -131,7 +131,7 @@
                 "typeHandlerVersion": "1.9",
                 "settings": {
                     "fileUris": [
-                        "https://imagecloudfiles.blob.core.windows.net/imagecloudfiles/ConfigureRemotingForAnsible.ps1",
+                        "https://files.imagecloud.io/ConfigureRemotingForAnsible.ps1",
                     ],
                     "commandToExecute": "powershell -ExecutionPolicy Unrestricted -file ConfigureRemotingForAnsible.ps1"
                 }
